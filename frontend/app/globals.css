@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --lk-bg: #001f3f;
+  --lk-fg: #ffffff;
+  --lk-accent-bg: #d4af37;
+  --lk-accent-fg: #001f3f;
+  --lk-border-color: rgba(212, 175, 55, 0.3);
+}
+
+body {
+  background-color: var(--lk-bg);
+  color: var(--lk-fg);
+  font-feature-settings: "ss01" 1, "ss02" 1;
+}
+
+/* Metallic gold gradient heading */
+.gold-text {
+  background: linear-gradient(
+    to right,
+    #bf953f,
+    #fcf6ba,
+    #b38728,
+    #fbf5b7,
+    #aa771c
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.02em;
+}
