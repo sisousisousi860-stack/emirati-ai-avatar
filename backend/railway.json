@@ -1,0 +1,10 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE"
+  },
+  "deploy": {
+    "startCommand": "python agent_worker.py start",
+    "restartPolicyType": "ON_FAILURE"
+  }
+}
