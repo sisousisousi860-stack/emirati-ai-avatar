@@ -43,35 +43,23 @@ def build_room_input_options():
 async def entrypoint(ctx: JobContext):
     await ctx.connect()
     
-    # OPTIMIZED SESSION - Much faster!
+    # OPTIMIZED SESSION
     session = AgentSession(
-        # Enable parallel LLM generation (saves 100-300ms)
-        preemptive_generation=True,
-        
-        # Faster LLM (103 tokens/sec vs 33)
         llm=openai.LLM(
-            model="gpt-4o",           # Faster than gpt-4o-mini
+            model="gpt-4o-mini",  # Using mini for cost
             temperature=0.7,
-            max_tokens=150,           # Keep responses short = faster
         ),
-        
-        # Faster TTS model
         tts=elevenlabs.TTS(
-            voice_id="TlKDNWnTobzVS4SXWTDi",
-            model_id="eleven_turbo_v2_5",  # 2x faster
+            voice_id="TlKDNWnTobzVS4SXWTDi"
         ),
-        
-        # Deepgram = 500-1000ms faster than Whisper!
         stt=deepgram.STT(
             model="nova-2",
-            language="en",  # Change to "ar" for Arabic if needed
+            language="en",
         ),
-        
-        # Optimized VAD (faster detection)
         vad=silero.VAD.load(
-            activation_threshold=0.25,      # Faster speech detection
-            min_speech_duration=0.1,        # Fewer false positives
-            min_silence_duration=0.2,       # Quicker end detection
+            activation_threshold=0.25,
+            min_speech_duration=0.1,
+            min_silence_duration=0.2,
             prefix_padding_duration=0.1,
             sample_rate=16000,
         ),
