@@ -48,3 +48,11 @@ typing_extensions==4.14.0
 watchfiles==1.0.5
 websockets==15.0.1
 yarl==1.20.1
+livekit
+livekit-agents
+livekit-plugins-openai
+livekit-plugins-elevenlabs
+livekit-plugins-silero
+livekit-plugins-hedra
+python-dotenv
+pillow
