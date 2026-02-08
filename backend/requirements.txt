@@ -52,7 +52,9 @@ livekit
 livekit-agents
 livekit-plugins-openai
 livekit-plugins-elevenlabs
-livekit-plugins-silero
 livekit-plugins-hedra
+livekit-plugins-silero
+livekit-plugins-deepgram
 python-dotenv
-pillow
+Pillow
+aiohttp
