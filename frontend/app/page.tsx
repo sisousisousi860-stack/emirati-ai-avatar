@@ -19,24 +19,81 @@ import type { ConnectionDetails } from "./api/connection-details/route";
 
 export default function Page() {
   const [room] = useState(new Room());
+  const [audioInitialized, setAudioInitialized] = useState(false);
 
   const onConnectButtonClicked = useCallback(async () => {
-    const url = new URL(
-      process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT ?? "/api/connection-details",
-      window.location.origin
-    );
-    const response = await fetch(url.toString());
-    const connectionDetailsData: ConnectionDetails = await response.json();
+    try {
+      // MOBILE FIX 1: Create and resume AudioContext FIRST (critical for iOS)
+      if (typeof window !== 'undefined' && !audioInitialized) {
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContext) {
+          const audioContext = new AudioContext();
+          console.log('AudioContext initial state:', audioContext.state);
+          
+          if (audioContext.state === 'suspended') {
+            await audioContext.resume();
+            console.log('AudioContext resumed:', audioContext.state);
+          }
+          setAudioInitialized(true);
+        }
+      }
 
-    await room.connect(
-      connectionDetailsData.serverUrl,
-      connectionDetailsData.participantToken
-    );
-    await room.localParticipant.setMicrophoneEnabled(true);
-  }, [room]);
+      // Fetch connection details
+      const url = new URL(
+        process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT ?? "/api/connection-details",
+        window.location.origin
+      );
+      const response = await fetch(url.toString());
+      const connectionDetailsData: ConnectionDetails = await response.json();
+
+      // MOBILE FIX 2: Connect with audio-optimized options
+      await room.connect(
+        connectionDetailsData.serverUrl,
+        connectionDetailsData.participantToken,
+        {
+          // Mobile-optimized connection options
+          autoSubscribe: true,
+          publishDefaults: {
+            audioPreset: {
+              maxBitrate: 64000, // Optimize for mobile bandwidth
+            },
+          },
+        }
+      );
+
+      // MOBILE FIX 3: Enable microphone with mobile-friendly constraints
+      await room.localParticipant.setMicrophoneEnabled(true, {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      });
+
+      console.log('✓ Room connected and microphone enabled');
+    } catch (error) {
+      console.error('Connection error:', error);
+      alert('Failed to connect. Please check microphone permissions and try again.');
+    }
+  }, [room, audioInitialized]);
 
   useEffect(() => {
+    // MOBILE FIX 4: Listen for audio track events
     room.on(RoomEvent.MediaDevicesError, onDeviceFailure);
+    
+    room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+      console.log('Track subscribed:', track.kind, participant.identity);
+      
+      // Force audio track to play (critical for mobile)
+      if (track.kind === 'audio' && track.mediaStreamTrack) {
+        const audioElement = track.attach();
+        audioElement.play().catch(e => {
+          console.error('Audio play failed:', e);
+          // Retry after user interaction
+          document.addEventListener('touchstart', () => {
+            audioElement.play().catch(console.error);
+          }, { once: true });
+        });
+      }
+    });
 
     return () => {
       room.off(RoomEvent.MediaDevicesError, onDeviceFailure);
