@@ -45,7 +45,7 @@ async def entrypoint(ctx: JobContext):
     
     # OPTIMIZED SESSION - Arabic primary with LLM-based multilingual support
     session = AgentSession(
-        preemptive_generation=True,
+        # REMOVED preemptive_generation - Railway doesn't support it
         llm=openai.LLM(
             model="gpt-4o-mini",
             temperature=0.7,
