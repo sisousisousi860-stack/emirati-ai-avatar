@@ -43,18 +43,19 @@ def build_room_input_options():
 async def entrypoint(ctx: JobContext):
     await ctx.connect()
     
-    # OPTIMIZED SESSION
+    # OPTIMIZED SESSION - Arabic primary with LLM-based multilingual support
     session = AgentSession(
+        preemptive_generation=True,
         llm=openai.LLM(
-            model="gpt-4o-mini",  # Using mini for cost
+            model="gpt-4o-mini",
             temperature=0.7,
         ),
         tts=elevenlabs.TTS(
-            voice_id="TlKDNWnTobzVS4SXWTDi"
+            voice_id="TlKDNWnTobzVS4SXWTDi",
         ),
         stt=deepgram.STT(
-            model="nova-2",
-            language="en",
+            model="nova-3",
+            language="ar",  # Arabic primary - will still capture English/French words
         ),
         vad=silero.VAD.load(
             activation_threshold=0.25,
@@ -79,10 +80,14 @@ async def entrypoint(ctx: JobContext):
     start_kwargs = dict(
         agent=Agent(
             instructions=(
-                "You are Emirati AI from Abu Dhabi. "
-                "Keep responses under 2 sentences. "
-                "Be direct and helpful. "
-                "Respond in user's language."
+                "You are Emirati AI, an AI assistant from Abu Dhabi, UAE. "
+                "You speak Arabic, English, and French fluently. "
+                "ALWAYS detect the user's language from their message and respond in that SAME language. "
+                "If they speak Arabic, respond ONLY in Arabic. "
+                "If they speak English, respond ONLY in English. "
+                "If they speak French, respond ONLY in French. "
+                "CRITICAL: Keep ALL responses under 20 words maximum. "
+                "Be concise, warm, and helpful."
             )
         ),
         room=ctx.room,
@@ -94,7 +99,7 @@ async def entrypoint(ctx: JobContext):
     await session.start(**start_kwargs)
     
     session.generate_reply(
-        instructions="Greet briefly: 'Hi! I'm Emirati AI. How can I help?'"
+        instructions="Greet warmly in Arabic: 'مرحباً! أنا الذكاء الاصطناعي الإماراتي. كيف يمكنني مساعدتك؟'"
     )
 
 if __name__ == "__main__":
