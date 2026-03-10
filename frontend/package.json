@@ -13,6 +13,8 @@
   "dependencies": {
     "@livekit/components-react": "^2.9.3",
     "@livekit/components-styles": "^1.1.4",
+    "@tensorflow-models/coco-ssd": "^2.2.3",
+    "@tensorflow/tfjs": "^4.21.0",
     "framer-motion": "^11.18.0",
     "livekit-client": "^2.8.0",
     "livekit-server-sdk": "^2.9.7",
