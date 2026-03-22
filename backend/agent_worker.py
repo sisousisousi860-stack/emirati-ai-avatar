@@ -70,8 +70,8 @@ async def entrypoint(ctx: JobContext):
             voice_id="TlKDNWnTobzVS4SXWTDi",
         ),
         stt=deepgram.STT(
-            model="nova-2",
-            language="multi",
+            model="nova-3",
+            detect_language=True,
         ),
         vad=silero.VAD.load(
             activation_threshold=0.25,
