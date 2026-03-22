@@ -71,7 +71,7 @@ async def entrypoint(ctx: JobContext):
         ),
         stt=deepgram.STT(
             model="nova-3",
-            detect_language=True,
+            language="ar",
         ),
         vad=silero.VAD.load(
             activation_threshold=0.25,
