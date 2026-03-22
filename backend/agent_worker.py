@@ -1,7 +1,10 @@
+import asyncio
+import json
 import logging
 import os
 from dotenv import load_dotenv
 from PIL import Image
+from livekit import rtc
 from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, WorkerType, cli
 from livekit.plugins import hedra, openai, elevenlabs, deepgram, silero
 
@@ -42,6 +45,21 @@ def build_room_input_options():
 
 async def entrypoint(ctx: JobContext):
     await ctx.connect()
+
+    # Wait up to 4 seconds for the frontend to send the visitor's name
+    visitor_name: str | None = None
+    name_event = asyncio.Event()
+
+    @ctx.room.on("data_received")
+    def on_data(data_packet: rtc.DataPacket):
+        nonlocal visitor_name
+        try:
+            payload = json.loads(bytes(data_packet.data).decode("utf-8"))
+            if payload.get("type") == "visitor":
+                visitor_name = payload.get("name") or None
+                name_event.set()
+        except Exception as e:
+            logger.warning(f"Data parse error: {e}")
     
     session = AgentSession(
         llm=openai.LLM(
@@ -52,8 +70,8 @@ async def entrypoint(ctx: JobContext):
             voice_id="TlKDNWnTobzVS4SXWTDi",
         ),
         stt=deepgram.STT(
-            model="nova-3",
-            language="ar",
+            model="nova-2",
+            language="multi",
         ),
         vad=silero.VAD.load(
             activation_threshold=0.25,
@@ -121,16 +139,33 @@ async def entrypoint(ctx: JobContext):
         start_kwargs["room_input_options"] = room_input_options
     
     await session.start(**start_kwargs)
-    
-    session.generate_reply(
-        instructions=(
-            "Someone just approached the kiosk screen and the camera detected them. "
-            "Greet them warmly with a short bilingual greeting in BOTH Arabic and English, like: "
-            "'مرحباً! أهلاً وسهلاً — Hello and welcome! I am Emirati AI from OryxAI Solutions. "
-            "How can I help you today? كيف يمكنني مساعدتك؟' "
-            "Keep it natural and friendly, under 3 sentences total."
+
+    # Wait for visitor name from frontend (max 4 seconds)
+    try:
+        await asyncio.wait_for(name_event.wait(), timeout=4.0)
+    except asyncio.TimeoutError:
+        pass
+
+    if visitor_name:
+        session.generate_reply(
+            instructions=(
+                f"The camera detected and recognized '{visitor_name}' approaching the kiosk. "
+                f"Greet them personally and warmly in BOTH Arabic and English, using their name. "
+                f"Example: 'مرحباً {visitor_name}! أهلاً وسهلاً — Welcome back, {visitor_name}! "
+                f"Great to see you at OryxAI Solutions. How can I assist you today?' "
+                f"Keep it short, warm, and personal — under 3 sentences."
+            )
         )
-    )
+    else:
+        session.generate_reply(
+            instructions=(
+                "Someone just approached the kiosk screen and the camera detected them. "
+                "Greet them warmly with a short bilingual greeting in BOTH Arabic and English: "
+                "'مرحباً! أهلاً وسهلاً — Hello and welcome! I am Emirati AI from OryxAI Solutions. "
+                "How can I help you today? كيف يمكنني مساعدتك؟' "
+                "Keep it natural and friendly, under 3 sentences total."
+            )
+        )
 
 if __name__ == "__main__":
     cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, worker_type=WorkerType.ROOM))
