@@ -69,9 +69,8 @@ async def entrypoint(ctx: JobContext):
         tts=elevenlabs.TTS(
             voice_id="TlKDNWnTobzVS4SXWTDi",
         ),
-        stt=deepgram.STT(
-            model="nova-3",
-            language="ar",
+        stt=openai.STT(
+            model="whisper-1",
         ),
         vad=silero.VAD.load(
             activation_threshold=0.25,

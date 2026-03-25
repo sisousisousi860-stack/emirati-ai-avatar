@@ -4,22 +4,24 @@ import { RefObject, useEffect, useRef } from "react";
 
 const PROXIMITY_THRESHOLD = 0.06;
 const CONFIDENCE_MIN = 0.45;
-const POLL_MS = 300; // fast polling for snappy detection
+const POLL_MS = 300;
 const LEAVE_TIMEOUT_MS = 10_000;
+const RECOG_BUFFER_SIZE = 3;   // require 3 consecutive polls agreeing on identity
+const RECOG_MAX_POLLS = 8;     // give up waiting for consensus after 8 polls → use majority
 
 interface Options {
-  onApproach: () => void;
+  onApproach: (name: string | null) => void;
   onLeave: () => void;
   onModelReady?: () => void;
   canvasRef?: RefObject<HTMLCanvasElement>;
 }
 
-// Draw gold corner-bracket overlay + badge on the canvas
 function drawDetectionOverlay(
   canvas: HTMLCanvasElement,
   video: HTMLVideoElement,
   prediction: any | null,
-  isClose: boolean
+  isClose: boolean,
+  badgeText?: string | null
 ) {
   const ctx = canvas.getContext("2d");
   if (!ctx || video.videoWidth === 0 || video.clientWidth === 0) return;
@@ -37,19 +39,18 @@ function drawDetectionOverlay(
   const y = by * sy;
   const w = bw * sx;
   const h = bh * sy;
-  const cl = Math.min(24, w * 0.18, h * 0.18); // corner length
+  const cl = Math.min(24, w * 0.18, h * 0.18);
 
-  const color = isClose ? "#D4AF37" : "rgba(255,255,255,0.5)";
+  const color = isClose ? "#C9A84C" : "rgba(255,255,255,0.4)";
   ctx.strokeStyle = color;
   ctx.lineWidth = isClose ? 3 : 2;
   ctx.lineCap = "round";
 
-  // Corner brackets
   const segs: [number, number, number, number, number, number][] = [
-    [x,         y + cl,     x,     y,         x + cl, y        ], // TL
-    [x + w - cl, y,         x + w, y,         x + w,  y + cl   ], // TR
-    [x,         y + h - cl, x,     y + h,     x + cl, y + h    ], // BL
-    [x + w - cl, y + h,     x + w, y + h,     x + w,  y + h - cl], // BR
+    [x,           y + cl,     x,     y,         x + cl, y         ],
+    [x + w - cl,  y,          x + w, y,         x + w,  y + cl    ],
+    [x,           y + h - cl, x,     y + h,     x + cl, y + h     ],
+    [x + w - cl,  y + h,      x + w, y + h,     x + w,  y + h - cl],
   ];
 
   for (const [x1, y1, x2, y2, x3, y3] of segs) {
@@ -60,17 +61,18 @@ function drawDetectionOverlay(
     ctx.stroke();
   }
 
-  // "Detected" gold badge above the box
-  if (isClose) {
-    const text = "تم الكشف ✓";
-    ctx.font = "bold 13px system-ui, sans-serif";
+  if (isClose && badgeText !== undefined) {
+    const text = badgeText ?? "Detected ✓";
+    ctx.font = "bold 12px system-ui, sans-serif";
     const tw = ctx.measureText(text).width + 16;
     const bx2 = x;
     const by2 = Math.max(2, y - 28);
-    ctx.fillStyle = "#D4AF37";
-    ctx.fillRect(bx2, by2, tw, 24);
-    ctx.fillStyle = "#001F3F";
-    ctx.fillText(text, bx2 + 8, by2 + 16);
+    ctx.fillStyle = "#C9A84C";
+    ctx.beginPath();
+    ctx.roundRect(bx2, by2, tw, 22, 4);
+    ctx.fill();
+    ctx.fillStyle = "#0a0f1a";
+    ctx.fillText(text, bx2 + 8, by2 + 15);
   }
 }
 
@@ -78,7 +80,6 @@ export function usePersonDetection(
   videoRef: RefObject<HTMLVideoElement>,
   { onApproach, onLeave, onModelReady, canvasRef }: Options
 ) {
-  // Keep latest callbacks in refs so the detection loop always calls the current version
   const onApproachRef = useRef(onApproach);
   const onLeaveRef = useRef(onLeave);
   const onModelReadyRef = useRef(onModelReady);
@@ -93,14 +94,32 @@ export function usePersonDetection(
     let leaveTimer: ReturnType<typeof setTimeout> | null = null;
     let isPresent = false;
 
+    // Recognition buffer — accumulates results until consensus
+    let recogBuffer: Array<string | null> = [];
+    let recogPollCount = 0;
+
+    function resetRecogBuffer() {
+      recogBuffer = [];
+      recogPollCount = 0;
+    }
+
+    function getMajority(arr: Array<string | null>): string | null {
+      const counts = new Map<string | null, number>();
+      for (const n of arr) counts.set(n, (counts.get(n) ?? 0) + 1);
+      let top: string | null = null;
+      let topCount = 0;
+      counts.forEach((count, name) => { if (count > topCount) { topCount = count; top = name; } });
+      return top;
+    }
+
     function schedulePoll() {
       if (!active) return;
       pollTimer = setTimeout(poll, POLL_MS);
     }
 
-    function markPresent() {
+    function markPresent(name: string | null) {
       if (leaveTimer) { clearTimeout(leaveTimer); leaveTimer = null; }
-      if (!isPresent) { isPresent = true; onApproachRef.current(); }
+      if (!isPresent) { isPresent = true; onApproachRef.current(name); }
     }
 
     function markAbsent() {
@@ -109,7 +128,7 @@ export function usePersonDetection(
         if (!active) return;
         isPresent = false;
         leaveTimer = null;
-        // Clear canvas when person leaves
+        resetRecogBuffer();
         if (canvasRef?.current) {
           const ctx = canvasRef.current.getContext("2d");
           ctx?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
@@ -139,13 +158,47 @@ export function usePersonDetection(
           isClose = (bw * bh) / (video.videoWidth * video.videoHeight) >= PROXIMITY_THRESHOLD;
         }
 
-        // Draw overlay directly on canvas (no React state update needed)
-        if (canvasRef?.current) {
-          drawDetectionOverlay(canvasRef.current, video, person ?? null, isClose);
-        }
+        if (isClose) {
+          // Run face recognition
+          let result: { name: string; confidence: number } | null = null;
+          try {
+            const { loadFaceModels, recognizeFace } = await import("./faceRecognition");
+            await loadFaceModels();
+            result = await recognizeFace(video);
+          } catch (_) {}
 
-        if (isClose) markPresent();
-        else markAbsent();
+          // Show live badge with confidence
+          const badgeText = result
+            ? `✓ ${result.name} (${result.confidence}%)`
+            : "Detected ✓";
+          if (canvasRef?.current) {
+            drawDetectionOverlay(canvasRef.current, video, person, true, badgeText);
+          }
+
+          // Build recognition buffer — require consensus before triggering approach
+          if (!isPresent) {
+            recogPollCount++;
+            recogBuffer.push(result?.name ?? null);
+            if (recogBuffer.length > RECOG_BUFFER_SIZE) recogBuffer.shift();
+
+            const allAgree =
+              recogBuffer.length === RECOG_BUFFER_SIZE &&
+              recogBuffer.every((n) => n === recogBuffer[0]);
+            const timedOut = recogPollCount >= RECOG_MAX_POLLS;
+
+            if (allAgree || timedOut) {
+              const confirmedName = getMajority(recogBuffer);
+              resetRecogBuffer();
+              markPresent(confirmedName);
+            }
+          }
+        } else {
+          if (canvasRef?.current) {
+            drawDetectionOverlay(canvasRef.current, video, person ?? null, false, null);
+          }
+          if (!isClose) resetRecogBuffer();
+          markAbsent();
+        }
       } catch (_) {}
 
       schedulePoll();
@@ -157,7 +210,6 @@ export function usePersonDetection(
         const cocoSsd = await import("@tensorflow-models/coco-ssd");
         if (!active) return;
         model = await (cocoSsd as any).load();
-        console.log("[PersonDetection] Model ready");
         if (!active) return;
         onModelReadyRef.current?.();
         schedulePoll();

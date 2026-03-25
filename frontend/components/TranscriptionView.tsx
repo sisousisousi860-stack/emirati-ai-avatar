@@ -5,7 +5,6 @@ export default function TranscriptionView() {
   const combinedTranscriptions = useCombinedTranscriptions();
   const containerRef = React.useRef<HTMLDivElement>(null);
 
-  // scroll to bottom when new transcription is added
   React.useEffect(() => {
     if (containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
@@ -13,27 +12,51 @@ export default function TranscriptionView() {
   }, [combinedTranscriptions]);
 
   return (
-    <div className="relative h-[200px] w-[512px] max-w-[90vw] mx-auto">
-      {/* Fade-out gradient mask */}
-      <div className="absolute top-0 left-0 right-0 h-8 bg-gradient-to-b from-[var(--lk-bg)] to-transparent z-10 pointer-events-none" />
-      <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-[var(--lk-bg)] to-transparent z-10 pointer-events-none" />
-
-      {/* Scrollable content */}
-      <div ref={containerRef} className="h-full flex flex-col gap-2 overflow-y-auto px-4 py-8">
-        {combinedTranscriptions.map((segment) => (
+    <div ref={containerRef} className="h-full overflow-y-auto px-3 py-3 flex flex-col gap-2">
+      {combinedTranscriptions.length === 0 && (
+        <div className="flex-1 flex items-center justify-center text-white/20 text-xs">
+          محادثة جديدة · New conversation
+        </div>
+      )}
+      {combinedTranscriptions.map((segment) => {
+        const isAssistant = segment.role === "assistant";
+        const hasArabic = /[\u0600-\u06FF]/.test(segment.text);
+        return (
           <div
-            id={segment.id}
             key={segment.id}
-            className={
-              segment.role === "assistant"
-                ? "p-2 self-start fit-content"
-                : "bg-gray-800 rounded-md p-2 self-end fit-content"
-            }
+            className={`flex flex-col gap-0.5 max-w-[85%] ${isAssistant ? "self-start" : "self-end"}`}
           >
-            {segment.text}
+            <span
+              className="text-[10px] px-1"
+              style={{
+                color: isAssistant ? "rgba(201,168,76,0.5)" : "rgba(96,165,250,0.5)",
+                textAlign: isAssistant ? "left" : "right",
+              }}
+            >
+              {isAssistant ? "الأفاتار الإماراتي" : "الزائر"}
+            </span>
+            <div
+              className="px-3 py-2 text-sm leading-relaxed"
+              style={{
+                borderRadius: isAssistant
+                  ? "4px 16px 16px 16px"
+                  : "16px 4px 16px 16px",
+                background: isAssistant
+                  ? "rgba(201,168,76,0.1)"
+                  : "rgba(59,130,246,0.12)",
+                border: isAssistant
+                  ? "1px solid rgba(201,168,76,0.18)"
+                  : "1px solid rgba(59,130,246,0.18)",
+                color: "rgba(255,255,255,0.85)",
+                direction: hasArabic ? "rtl" : "ltr",
+                textAlign: hasArabic ? "right" : "left",
+              }}
+            >
+              {segment.text}
+            </div>
           </div>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 }
