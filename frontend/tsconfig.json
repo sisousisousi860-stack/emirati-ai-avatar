@@ -12,11 +12,9 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
-    "baseUrl": ".", // ADD THIS
+    "baseUrl": ".",
     "paths": {
-      "@/*": ["app/*"], // for app/ folder (like @/layout or @/api)
-      "@components/*": ["components/*"],
-      "@hooks/*": ["hooks/*"]
+      "@/*": ["./*"]
     },
     "plugins": [
       {
