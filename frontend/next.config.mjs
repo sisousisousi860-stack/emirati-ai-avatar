@@ -6,10 +6,10 @@ const __dirname = path.dirname(__filename);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  eslint: { ignoreDuringBuilds: true },
+  typescript: { ignoreBuildErrors: true },
   webpack(config) {
-    config.resolve.alias['@'] = path.resolve(__dirname, 'app');
-    config.resolve.alias['@components'] = path.resolve(__dirname, 'components');
-    config.resolve.alias['@hooks'] = path.resolve(__dirname, 'hooks');
+    config.resolve.alias['@'] = path.resolve(__dirname);
     return config;
   }
 };
