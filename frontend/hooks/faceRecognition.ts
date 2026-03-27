@@ -1,15 +1,29 @@
 "use client";
 
-// Models served locally from /public/face-models (no CDN dependency)
 const MODELS_URL = "/face-models";
-const STORAGE_KEY = "emirati-ai-known-faces";
 
 let modelsLoaded = false;
 let faceapi: any = null;
 
-interface StoredFace {
-  name: string;
-  descriptors: number[][];
+// In-memory cache so we don't hit the DB on every 300ms poll
+let cachedFaces: { name: string; descriptors: number[][] }[] = [];
+let cacheExpiry = 0;
+const CACHE_TTL_MS = 30_000; // refresh from DB every 30 seconds
+
+async function getFaces(): Promise<{ name: string; descriptors: number[][] }[]> {
+  if (Date.now() < cacheExpiry && cachedFaces.length > 0) return cachedFaces;
+  try {
+    const res = await fetch("/api/faces");
+    cachedFaces = await res.json();
+    cacheExpiry = Date.now() + CACHE_TTL_MS;
+  } catch {
+    // Keep stale cache on network error
+  }
+  return cachedFaces;
+}
+
+function invalidateCache() {
+  cacheExpiry = 0;
 }
 
 export async function loadFaceModels(): Promise<void> {
@@ -44,21 +58,19 @@ export async function registerFace(
       return "no_face";
     }
 
-    console.log("[ADMIN] Descriptor computed:", detection.descriptor?.length === 128 ? "YES (128-dim)" : "FAILED", "score:", detection.detection?.score?.toFixed(3));
+    console.log("[ADMIN] Descriptor:", detection.descriptor?.length === 128 ? "128-dim OK" : "FAILED", "score:", detection.detection?.score?.toFixed(3));
 
-    const stored: StoredFace[] = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
-    const existing = stored.find((f) => f.name === name);
+    const descriptor = Array.from(detection.descriptor) as number[];
+    const res = await fetch("/api/faces", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, descriptor }),
+    });
 
-    if (existing) {
-      existing.descriptors.push(Array.from(detection.descriptor));
-    } else {
-      stored.push({ name, descriptors: [Array.from(detection.descriptor)] });
-    }
+    if (!res.ok) throw new Error("API save failed");
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
-    const saved = localStorage.getItem(STORAGE_KEY)!;
-    const totalPhotos = stored.find(f => f.name === name)?.descriptors.length ?? 0;
-    console.log("[ADMIN] Saved OK —", name, "now has", totalPhotos, "descriptors, storage size:", (saved.length / 1024).toFixed(1), "KB");
+    invalidateCache();
+    console.log("[ADMIN] Saved to database OK");
     return "ok";
   } catch (e) {
     console.error("[ADMIN] registerFace error:", e);
@@ -66,38 +78,24 @@ export async function registerFace(
   }
 }
 
-// Returns { name, confidence (0-100) } or null if unknown
 export async function recognizeFace(
   video: HTMLVideoElement
 ): Promise<{ name: string; confidence: number } | null> {
-  if (!modelsLoaded || !faceapi) {
-    console.log("[FACE] recognizeFace called but models not loaded yet");
-    return null;
-  }
+  if (!modelsLoaded || !faceapi) return null;
   if (video.readyState < 2 || video.videoWidth === 0) return null;
 
-  const stored: StoredFace[] = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
-  console.log("[FACE] Storage key:", STORAGE_KEY, "| People registered:", stored.length,
-    stored.map(f => `${f.name}(${f.descriptors.length})`).join(", ") || "NONE");
-
-  if (stored.length === 0) {
-    console.warn("[FACE] No registered faces — go to /admin to register");
-    return null;
-  }
+  const stored = await getFaces();
+  if (stored.length === 0) return null;
 
   try {
-    console.log("[FACE] Running face detection on video frame...");
     const detection = await faceapi
       .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.4 }))
       .withFaceLandmarks(true)
       .withFaceDescriptor();
 
-    if (!detection) {
-      console.log("[FACE] No face descriptor found in current frame");
-      return null;
-    }
+    if (!detection) return null;
 
-    console.log("[FACE] Detection score:", detection.detection?.score?.toFixed(3), "| Descriptor:", detection.descriptor?.length === 128 ? "128-dim OK" : "MISSING");
+    console.log("[FACE] Detection score:", detection.detection?.score?.toFixed(3));
 
     const labeledDescriptors = stored.map(
       (f) =>
@@ -107,15 +105,13 @@ export async function recognizeFace(
         )
     );
 
-    // Threshold 0.6 — good for kiosk/webcam with varying lighting
     const matcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6);
     const match = matcher.findBestMatch(detection.descriptor);
 
-    console.log("[FACE] Best match:", match.label, "| distance:", match.distance.toFixed(3), "| threshold: 0.45 |", match.distance < 0.45 ? "MATCHED ✓" : "NO MATCH ✗");
+    console.log("[FACE] Match:", match.label, "distance:", match.distance.toFixed(3), match.distance < 0.6 ? "✓" : "✗");
 
     if (match.label !== "unknown") {
-      const confidence = Math.round((1 - match.distance) * 100);
-      return { name: match.label, confidence };
+      return { name: match.label, confidence: Math.round((1 - match.distance) * 100) };
     }
     return null;
   } catch (e) {
@@ -124,12 +120,16 @@ export async function recognizeFace(
   }
 }
 
-export function getRegisteredFaces(): { name: string; count: number }[] {
-  const stored: StoredFace[] = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
+export async function getRegisteredFaces(): Promise<{ name: string; count: number }[]> {
+  const stored = await getFaces();
   return stored.map((f) => ({ name: f.name, count: f.descriptors.length }));
 }
 
-export function removeRegisteredFace(name: string): void {
-  const stored: StoredFace[] = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(stored.filter((f) => f.name !== name)));
+export async function removeRegisteredFace(name: string): Promise<void> {
+  await fetch("/api/faces", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  invalidateCache();
 }

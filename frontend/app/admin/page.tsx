@@ -71,9 +71,11 @@ export default function AdminPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
 
+  const refreshFaces = async () => { setFaces(await getRegisteredFaces()); };
+
   useEffect(() => {
     loadFaceModels()
-      .then(() => { setModelReady(true); setFaces(getRegisteredFaces()); })
+      .then(async () => { setModelReady(true); await refreshFaces(); })
       .catch((e) => console.error("Model load failed:", e));
   }, []);
 
@@ -99,7 +101,7 @@ export default function AdminPage() {
     setProcessing(false);
     if (result === "ok") {
       setStatus({ msg: `✓ Photo added for "${name.trim()}"`, ok: true });
-      setFaces(getRegisteredFaces());
+      refreshFaces();
     } else if (result === "no_face") {
       setStatus({ msg: "No face detected — look directly at the camera", ok: false });
     } else {
@@ -124,7 +126,7 @@ export default function AdminPage() {
     }
     setProcessing(false);
     setAutoProgress(null);
-    setFaces(getRegisteredFaces());
+    refreshFaces();
     if (ok > 0) {
       setStatus({ msg: `✓ ${ok}/${FRAMES} frames captured for "${name.trim()}" — these will match much better!`, ok: true });
     } else {
@@ -167,10 +169,10 @@ export default function AdminPage() {
     setStatus({ msg: "Detecting face...", ok: true });
     const result = await registerFace(processedImg, name.trim());
     setProcessing(false);
-    const updatedFaces = getRegisteredFaces();
+    const updatedFaces = await getRegisteredFaces();
     setFaces(updatedFaces);
     if (result === "ok") {
-      const count = updatedFaces.find((f) => f.name === name.trim())?.count ?? 0;
+      const count = updatedFaces.find((f: { name: string; count: number }) => f.name === name.trim())?.count ?? 0;
       setStatus({ msg: `✓ Photo ${count}/${PHOTO_GOAL} added for "${name.trim()}"`, ok: true });
       setPreviewSrc(null);
       setProcessedImg(null);
@@ -182,10 +184,10 @@ export default function AdminPage() {
     }
   };
 
-  const handleRemove = (faceName: string) => {
+  const handleRemove = async (faceName: string) => {
     if (confirm(`Remove "${faceName}" from known faces?`)) {
-      removeRegisteredFace(faceName);
-      setFaces(getRegisteredFaces());
+      await removeRegisteredFace(faceName);
+      refreshFaces();
     }
   };
 
