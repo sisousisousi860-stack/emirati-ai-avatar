@@ -227,6 +227,7 @@ export default function Page() {
               <canvas
                 ref={canvasRef}
                 className="absolute inset-0 w-full h-full pointer-events-none"
+                style={{ transform: "scaleX(-1)" }}
               />
             </div>
 
@@ -406,7 +407,7 @@ function AvatarPanel() {
     <div
       className="rounded-2xl overflow-hidden relative flex-shrink-0"
       style={{
-        height: "260px",
+        height: "360px",
         border: "1px solid rgba(201,168,76,0.18)",
         background: "#000",
       }}

@@ -65,6 +65,7 @@ export default function AdminPage() {
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [processedImg, setProcessedImg] = useState<HTMLImageElement | null>(null);
+  const [autoProgress, setAutoProgress] = useState<{ done: number; total: number } | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -103,6 +104,31 @@ export default function AdminPage() {
       setStatus({ msg: "No face detected — look directly at the camera", ok: false });
     } else {
       setStatus({ msg: "Error — try again", ok: false });
+    }
+  };
+
+  // Auto-capture 5 frames from live webcam with 800ms between each
+  const handleAutoCapture = async () => {
+    if (!name.trim()) { setStatus({ msg: "Enter a name first", ok: false }); return; }
+    if (!videoRef.current) return;
+    const FRAMES = 5;
+    let ok = 0;
+    setProcessing(true);
+    setAutoProgress({ done: 0, total: FRAMES });
+    setStatus({ msg: `Look straight at the camera — capturing ${FRAMES} frames...`, ok: true });
+    for (let i = 0; i < FRAMES; i++) {
+      await new Promise((r) => setTimeout(r, 800));
+      const result = await registerFace(videoRef.current!, name.trim());
+      if (result === "ok") ok++;
+      setAutoProgress({ done: i + 1, total: FRAMES });
+    }
+    setProcessing(false);
+    setAutoProgress(null);
+    setFaces(getRegisteredFaces());
+    if (ok > 0) {
+      setStatus({ msg: `✓ ${ok}/${FRAMES} frames captured for "${name.trim()}" — these will match much better!`, ok: true });
+    } else {
+      setStatus({ msg: "No face detected in any frame — face the camera directly with good lighting", ok: false });
     }
   };
 
@@ -260,19 +286,55 @@ export default function AdminPage() {
                 style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)" }}
               />
 
-              <button
-                onClick={tab === "webcam" ? handleCapture : handleRegisterPhoto}
-                disabled={!name.trim() || processing || (tab === "upload" && !previewSrc)}
-                className="w-full font-bold py-3 rounded-xl transition active:scale-[0.99]"
-                style={{
-                  background: "#C9A84C",
-                  color: "#0a0f1a",
-                  opacity: (!name.trim() || processing || (tab === "upload" && !previewSrc)) ? 0.4 : 1,
-                  cursor: (!name.trim() || processing || (tab === "upload" && !previewSrc)) ? "not-allowed" : "pointer",
-                }}
-              >
-                {processing ? "Processing..." : tab === "webcam" ? "Capture & Register" : "Register This Photo"}
-              </button>
+              {tab === "webcam" ? (
+                <div className="space-y-2">
+                  <button
+                    onClick={handleAutoCapture}
+                    disabled={!name.trim() || processing}
+                    className="w-full font-bold py-3 rounded-xl transition active:scale-[0.99]"
+                    style={{
+                      background: "#C9A84C", color: "#0a0f1a",
+                      opacity: (!name.trim() || processing) ? 0.4 : 1,
+                      cursor: (!name.trim() || processing) ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {autoProgress ? `Capturing... ${autoProgress.done}/${autoProgress.total}` : "Auto-Capture 5 Frames ⚡"}
+                  </button>
+
+                  {autoProgress && (
+                    <div className="w-full rounded-full h-1.5" style={{ background: "rgba(255,255,255,0.08)" }}>
+                      <div className="h-1.5 rounded-full transition-all"
+                        style={{ width: `${(autoProgress.done / autoProgress.total) * 100}%`, background: "#C9A84C" }} />
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleCapture}
+                    disabled={!name.trim() || processing}
+                    className="w-full py-2.5 rounded-xl text-sm transition"
+                    style={{
+                      border: "1px solid rgba(201,168,76,0.3)", color: "rgba(201,168,76,0.7)",
+                      opacity: (!name.trim() || processing) ? 0.4 : 1,
+                      cursor: (!name.trim() || processing) ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    Single Capture
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={handleRegisterPhoto}
+                  disabled={!name.trim() || processing || !previewSrc}
+                  className="w-full font-bold py-3 rounded-xl transition active:scale-[0.99]"
+                  style={{
+                    background: "#C9A84C", color: "#0a0f1a",
+                    opacity: (!name.trim() || processing || !previewSrc) ? 0.4 : 1,
+                    cursor: (!name.trim() || processing || !previewSrc) ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {processing ? "Processing..." : "Register This Photo"}
+                </button>
+              )}
 
               {status && (
                 <p className="text-sm" style={{ color: status.ok ? "#C9A84C" : "#f87171" }}>

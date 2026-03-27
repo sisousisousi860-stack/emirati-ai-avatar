@@ -14,7 +14,8 @@ interface StoredFace {
 
 export async function loadFaceModels(): Promise<void> {
   if (modelsLoaded) return;
-  const fa = await import("face-api.js");
+  console.log("[FACE] Loading face models from", MODELS_URL);
+  const fa = await import("@vladmandic/face-api");
   faceapi = fa;
   await Promise.all([
     fa.nets.tinyFaceDetector.loadFromUri(MODELS_URL),
@@ -22,6 +23,7 @@ export async function loadFaceModels(): Promise<void> {
     fa.nets.faceRecognitionNet.loadFromUri(MODELS_URL),
   ]);
   modelsLoaded = true;
+  console.log("[FACE] Models loaded OK");
 }
 
 export async function registerFace(
@@ -31,12 +33,18 @@ export async function registerFace(
   try {
     if (!modelsLoaded || !faceapi) await loadFaceModels();
 
+    console.log("[ADMIN] Computing descriptor for:", name);
     const detection = await faceapi
-      .detectSingleFace(element, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.4 }))
+      .detectSingleFace(element, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.3 }))
       .withFaceLandmarks(true)
       .withFaceDescriptor();
 
-    if (!detection) return "no_face";
+    if (!detection) {
+      console.warn("[ADMIN] No face detected in image");
+      return "no_face";
+    }
+
+    console.log("[ADMIN] Descriptor computed:", detection.descriptor?.length === 128 ? "YES (128-dim)" : "FAILED", "score:", detection.detection?.score?.toFixed(3));
 
     const stored: StoredFace[] = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
     const existing = stored.find((f) => f.name === name);
@@ -48,9 +56,12 @@ export async function registerFace(
     }
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+    const saved = localStorage.getItem(STORAGE_KEY)!;
+    const totalPhotos = stored.find(f => f.name === name)?.descriptors.length ?? 0;
+    console.log("[ADMIN] Saved OK —", name, "now has", totalPhotos, "descriptors, storage size:", (saved.length / 1024).toFixed(1), "KB");
     return "ok";
   } catch (e) {
-    console.error("[FaceRecognition] registerFace error:", e);
+    console.error("[ADMIN] registerFace error:", e);
     return "error";
   }
 }
@@ -59,19 +70,34 @@ export async function registerFace(
 export async function recognizeFace(
   video: HTMLVideoElement
 ): Promise<{ name: string; confidence: number } | null> {
-  if (!modelsLoaded || !faceapi) return null;
+  if (!modelsLoaded || !faceapi) {
+    console.log("[FACE] recognizeFace called but models not loaded yet");
+    return null;
+  }
   if (video.readyState < 2 || video.videoWidth === 0) return null;
 
   const stored: StoredFace[] = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
-  if (stored.length === 0) return null;
+  console.log("[FACE] Storage key:", STORAGE_KEY, "| People registered:", stored.length,
+    stored.map(f => `${f.name}(${f.descriptors.length})`).join(", ") || "NONE");
+
+  if (stored.length === 0) {
+    console.warn("[FACE] No registered faces — go to /admin to register");
+    return null;
+  }
 
   try {
+    console.log("[FACE] Running face detection on video frame...");
     const detection = await faceapi
       .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.4 }))
       .withFaceLandmarks(true)
       .withFaceDescriptor();
 
-    if (!detection) return null;
+    if (!detection) {
+      console.log("[FACE] No face descriptor found in current frame");
+      return null;
+    }
+
+    console.log("[FACE] Detection score:", detection.detection?.score?.toFixed(3), "| Descriptor:", detection.descriptor?.length === 128 ? "128-dim OK" : "MISSING");
 
     const labeledDescriptors = stored.map(
       (f) =>
@@ -81,16 +107,19 @@ export async function recognizeFace(
         )
     );
 
-    // Threshold 0.45 — lower = stricter match required
-    const matcher = new faceapi.FaceMatcher(labeledDescriptors, 0.45);
+    // Threshold 0.6 — good for kiosk/webcam with varying lighting
+    const matcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6);
     const match = matcher.findBestMatch(detection.descriptor);
+
+    console.log("[FACE] Best match:", match.label, "| distance:", match.distance.toFixed(3), "| threshold: 0.45 |", match.distance < 0.45 ? "MATCHED ✓" : "NO MATCH ✗");
 
     if (match.label !== "unknown") {
       const confidence = Math.round((1 - match.distance) * 100);
       return { name: match.label, confidence };
     }
     return null;
-  } catch {
+  } catch (e) {
+    console.error("[FACE] recognizeFace error:", e);
     return null;
   }
 }

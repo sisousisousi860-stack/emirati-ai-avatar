@@ -15,7 +15,7 @@
     "@livekit/components-styles": "^1.1.4",
     "@tensorflow-models/coco-ssd": "^2.2.3",
     "@tensorflow/tfjs": "^4.21.0",
-    "face-api.js": "^0.22.2",
+    "@vladmandic/face-api": "^1.7.15",
     "framer-motion": "^11.18.0",
     "livekit-client": "^2.8.0",
     "livekit-server-sdk": "^2.9.7",
@@ -36,5 +36,13 @@
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.3"
   },
-  "packageManager": "pnpm@9.15.9"
+  "packageManager": "pnpm@9.15.9",
+  "pnpm": {
+    "overrides": {
+      "@tensorflow/tfjs-core": "4.22.0",
+      "@tensorflow/tfjs-backend-webgl": "4.22.0",
+      "@tensorflow/tfjs-backend-cpu": "4.22.0",
+      "@tensorflow/tfjs-converter": "4.22.0"
+    }
+  }
 }

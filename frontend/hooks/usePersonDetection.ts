@@ -35,10 +35,12 @@ function drawDetectionOverlay(
   const sx = canvas.width / video.videoWidth;
   const sy = canvas.height / video.videoHeight;
   const [bx, by, bw, bh] = prediction.bbox;
-  const x = bx * sx;
-  const y = by * sy;
+  // Canvas is counter-flipped (scaleX(-1) on element cancels container scaleX(-1)),
+  // so it renders in normal screen space. Mirror x to match the displayed mirror video.
   const w = bw * sx;
   const h = bh * sy;
+  const x = canvas.width - (bx + bw) * sx; // mirror: right edge becomes left edge
+  const y = by * sy;
   const cl = Math.min(24, w * 0.18, h * 0.18);
 
   const color = isClose ? "#C9A84C" : "rgba(255,255,255,0.4)";
@@ -206,7 +208,9 @@ export function usePersonDetection(
 
     async function init() {
       try {
-        await import("@tensorflow/tfjs");
+        const tf = await import("@tensorflow/tfjs");
+        await tf.setBackend("webgl");
+        await tf.ready();
         const cocoSsd = await import("@tensorflow-models/coco-ssd");
         if (!active) return;
         model = await (cocoSsd as any).load();
@@ -214,7 +218,20 @@ export function usePersonDetection(
         onModelReadyRef.current?.();
         schedulePoll();
       } catch (e) {
-        console.warn("[PersonDetection] Failed to load model:", e);
+        console.warn("[PersonDetection] WebGL failed, trying CPU backend:", e);
+        try {
+          const tf = await import("@tensorflow/tfjs");
+          await tf.setBackend("cpu");
+          await tf.ready();
+          const cocoSsd = await import("@tensorflow-models/coco-ssd");
+          if (!active) return;
+          model = await (cocoSsd as any).load();
+          if (!active) return;
+          onModelReadyRef.current?.();
+          schedulePoll();
+        } catch (e2) {
+          console.warn("[PersonDetection] Failed to load model:", e2);
+        }
       }
     }
 
