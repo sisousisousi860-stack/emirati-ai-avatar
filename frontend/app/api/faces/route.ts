@@ -3,7 +3,10 @@ import { getDb } from "@/lib/db";
 
 // GET /api/faces — returns all registered people with their descriptors
 export async function GET() {
-  const client = await getDb();
+  const client = await getDb().catch((e) => {
+    console.error("[DB] Connection error:", e.message);
+    throw e;
+  });
   try {
     const { rows } = await client.query(
       "SELECT name, descriptor FROM face_descriptors ORDER BY created_at ASC"
@@ -35,7 +38,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "name and descriptor required" }, { status: 400 });
   }
 
-  const client = await getDb();
+  const client = await getDb().catch((e) => {
+    console.error("[DB] Connection error:", e.message);
+    throw e;
+  });
   try {
     await client.query(
       "INSERT INTO face_descriptors (name, descriptor) VALUES ($1, $2)",

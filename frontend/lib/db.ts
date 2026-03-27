@@ -3,9 +3,7 @@ import { Pool } from "pg";
 // Single connection pool reused across requests
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes("railway") || process.env.DATABASE_URL?.includes("amazonaws")
-    ? { rejectUnauthorized: false }
-    : false,
+  ssl: { rejectUnauthorized: false },
 });
 
 // Create table on first use
