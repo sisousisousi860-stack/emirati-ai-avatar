@@ -10,6 +10,8 @@ const nextConfig = {
   typescript: { ignoreBuildErrors: true },
   webpack(config) {
     config.resolve.alias['@'] = path.resolve(__dirname);
+    config.resolve.alias['@components'] = path.resolve(__dirname, 'components');
+    config.resolve.alias['@hooks'] = path.resolve(__dirname, 'hooks');
     return config;
   }
 };
