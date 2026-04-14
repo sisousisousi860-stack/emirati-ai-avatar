@@ -74,10 +74,10 @@ async def entrypoint(ctx: JobContext):
             language="ar",
         ),
         vad=silero.VAD.load(
-            activation_threshold=0.7,
-            min_speech_duration=0.4,
-            min_silence_duration=0.6,
-            prefix_padding_duration=0.2,
+            activation_threshold=0.25,
+            min_speech_duration=0.1,
+            min_silence_duration=0.2,
+            prefix_padding_duration=0.1,
             sample_rate=16000,
         ),
     )

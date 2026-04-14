@@ -171,7 +171,7 @@ export function usePersonDetection(
 
           // Show live badge with confidence
           const badgeText = result
-            ? `✓ ${result.name} (${result.confidence}%)`
+            ? `✓ ${result.name}`
             : "Detected ✓";
           if (canvasRef?.current) {
             drawDetectionOverlay(canvasRef.current, video, person, true, badgeText);
