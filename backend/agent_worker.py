@@ -68,6 +68,7 @@ async def entrypoint(ctx: JobContext):
         ),
         tts=elevenlabs.TTS(
             voice_id="TlKDNWnTobzVS4SXWTDi",
+            model="eleven_turbo_v2_5",
         ),
         stt=openai.STT(
             model="whisper-1",
