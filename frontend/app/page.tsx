@@ -11,9 +11,10 @@ import {
   VideoTrack,
   VoiceAssistantControlBar,
   useVoiceAssistant,
+  useTracks,
 } from "@livekit/components-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Room, RoomEvent } from "livekit-client";
+import { Room, RoomEvent, Track } from "livekit-client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ConnectionDetails } from "./api/connection-details/route";
 import { usePersonDetection } from "@hooks/usePersonDetection";
@@ -403,6 +404,17 @@ function KioskPanel(props: {
 function AvatarPanel() {
   const { state: agentState, videoTrack, audioTrack } = useVoiceAssistant();
 
+  // Direct track subscription — more reliable than useVoiceAssistant for Hedra
+  const allVideoTracks = useTracks(
+    [Track.Source.Camera, Track.Source.ScreenShare, Track.Source.Unknown],
+    { onlySubscribed: true }
+  );
+  const agentVideoTrack = allVideoTracks.find(
+    (t) => !t.participant.isLocal && t.publication.kind === Track.Kind.Video
+  );
+
+  const activeVideoTrack = videoTrack ?? agentVideoTrack;
+
   return (
     <div
       className="rounded-2xl overflow-hidden relative flex-shrink-0"
@@ -419,8 +431,8 @@ function AvatarPanel() {
         <span className="text-[10px] font-bold tracking-widest" style={{ color: "rgba(255,255,255,0.65)" }}>LIVE</span>
       </div>
 
-      {videoTrack ? (
-        <VideoTrack trackRef={videoTrack} className="w-full h-full object-contain" />
+      {activeVideoTrack ? (
+        <VideoTrack trackRef={activeVideoTrack} className="w-full h-full object-contain" />
       ) : (
         <div className="w-full h-full flex items-center justify-center">
           <BarVisualizer
