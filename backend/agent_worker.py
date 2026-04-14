@@ -68,9 +68,11 @@ async def entrypoint(ctx: JobContext):
         ),
         tts=elevenlabs.TTS(
             voice_id="TlKDNWnTobzVS4SXWTDi",
+            model="eleven_multilingual_v2",
         ),
         stt=openai.STT(
             model="whisper-1",
+            language="ar",
         ),
         vad=silero.VAD.load(
             activation_threshold=0.25,
@@ -116,10 +118,10 @@ async def entrypoint(ctx: JobContext):
                 "YOUR ROLE & COMMUNICATION STYLE:\n"
                 "- You are a professional, knowledgeable, and helpful AI representative of OryxAI Solutions\n"
                 "- You speak Arabic, English, and French fluently\n"
-                "- You can understand and respond to mixed Arabic-English (code-switching) conversations naturally\n"
-                "- CRITICAL: Always detect the user's language from their FIRST message and respond in that same language for the rest of the conversation\n"
-                "- If they speak Arabic → respond in Arabic. If English → respond in English. If French → respond in French. If mixed → mix naturally\n"
-                "- Default greeting is bilingual (Arabic + English) since you do not yet know their language\n\n"
+                "- CRITICAL: You ALWAYS respond in Arabic by default — this is an Arabic-first kiosk\n"
+                "- If the user speaks to you in English, respond in Arabic anyway unless they specifically ask you to speak English\n"
+                "- Use Modern Standard Arabic (فصحى) with a warm Gulf/Emirati tone\n"
+                "- Keep responses concise and clear for TTS playback\n\n"
 
                 "RESPONSE GUIDELINES:\n"
                 "- Provide detailed, informative responses (2-4 sentences is ideal)\n"
@@ -148,21 +150,19 @@ async def entrypoint(ctx: JobContext):
     if visitor_name:
         session.generate_reply(
             instructions=(
-                f"The camera detected and recognized '{visitor_name}' approaching the kiosk. "
-                f"Greet them personally and warmly in BOTH Arabic and English, using their name. "
-                f"Example: 'مرحباً {visitor_name}! أهلاً وسهلاً — Welcome back, {visitor_name}! "
-                f"Great to see you at OryxAI Solutions. How can I assist you today?' "
-                f"Keep it short, warm, and personal — under 3 sentences."
+                f"الكاميرا رصدت وتعرّفت على '{visitor_name}' يقترب من الشاشة. "
+                f"رحّب به بالاسم بشكل شخصي ودافئ باللغة العربية. "
+                f"مثال: 'مرحباً {visitor_name}! أهلاً وسهلاً بك في OryxAI Solutions. كيف يمكنني مساعدتك اليوم؟' "
+                f"اجعل الرد قصيراً وحاراً — جملتين على الأكثر."
             )
         )
     else:
         session.generate_reply(
             instructions=(
-                "Someone just approached the kiosk screen and the camera detected them. "
-                "Greet them warmly with a short bilingual greeting in BOTH Arabic and English: "
-                "'مرحباً! أهلاً وسهلاً — Hello and welcome! I am Emirati AI from OryxAI Solutions. "
-                "How can I help you today? كيف يمكنني مساعدتك؟' "
-                "Keep it natural and friendly, under 3 sentences total."
+                "شخص اقترب من شاشة الكشك والكاميرا رصدته. "
+                "رحّب به بتحية قصيرة ودافئة باللغة العربية: "
+                "'مرحباً! أهلاً وسهلاً، أنا الذكاء الاصطناعي الإماراتي من OryxAI Solutions. كيف يمكنني مساعدتك اليوم؟' "
+                "اجعل الرد طبيعياً وودياً — جملتين على الأكثر."
             )
         )
 
