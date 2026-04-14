@@ -66,9 +66,9 @@ async def entrypoint(ctx: JobContext):
             model="gpt-4o-mini",
             temperature=0.7,
         ),
-        tts=elevenlabs.TTS(
-            voice_id="TlKDNWnTobzVS4SXWTDi",
-            model="eleven_multilingual_v2",
+        tts=openai.TTS(
+            model="tts-1",
+            voice="onyx",
         ),
         stt=openai.STT(
             model="whisper-1",
