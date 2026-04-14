@@ -88,9 +88,14 @@ async def entrypoint(ctx: JobContext):
     
     logger.info(f"Loading Emirati AI avatar from {avatar_path}")
     avatar_image = Image.open(avatar_path)
-    hedra_avatar = hedra.AvatarSession(avatar_image=avatar_image)
-    
-    await hedra_avatar.start(session, room=ctx.room)
+    try:
+        hedra_avatar = hedra.AvatarSession(avatar_image=avatar_image)
+        logger.info("Hedra session created, starting...")
+        await hedra_avatar.start(session, room=ctx.room)
+        logger.info("Hedra session started OK")
+    except Exception as e:
+        logger.error(f"Hedra failed to start: {e}", exc_info=True)
+        raise
     
     room_input_options = build_room_input_options()
     start_kwargs = dict(
