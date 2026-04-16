@@ -1,7 +1,8 @@
 requests
 aiohttp
 python-dotenv
-livekit-server-sdk
+livekit
+livekit-api
 livekit-agents
 livekit-plugins-deepgram
 livekit-plugins-openai
