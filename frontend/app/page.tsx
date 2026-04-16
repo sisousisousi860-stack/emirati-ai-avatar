@@ -404,16 +404,32 @@ function KioskPanel(props: {
 function AvatarPanel() {
   const { state: agentState, videoTrack, audioTrack } = useVoiceAssistant();
 
-  // Direct track subscription — more reliable than useVoiceAssistant for Hedra
-  const allVideoTracks = useTracks(
-    [Track.Source.Camera, Track.Source.ScreenShare, Track.Source.Unknown],
-    { onlySubscribed: true }
+  // Direct track subscription — find Hedra's video track by participant identity
+  const allTracks = useTracks(
+    [{ source: Track.Source.Camera, withPlaceholder: false }],
+    { onlySubscribed: false }
   );
-  const agentVideoTrack = allVideoTracks.find(
-    (t) => !t.participant.isLocal && t.publication.kind === Track.Kind.Video
+  const hedraVideoTrack = allTracks.find(
+    (t) => t.participant.identity.includes("hedra") && t.source === Track.Source.Camera
+  );
+  // Fallback: any remote video track
+  const anyRemoteVideo = allTracks.find(
+    (t) => !t.participant.isLocal
   );
 
-  const activeVideoTrack = videoTrack ?? agentVideoTrack;
+  const activeVideoTrack = videoTrack ?? (hedraVideoTrack?.publication ? hedraVideoTrack : undefined) ?? (anyRemoteVideo?.publication ? anyRemoteVideo : undefined);
+
+  useEffect(() => {
+    console.log("[AVATAR] agentState:", agentState);
+    console.log("[AVATAR] useVoiceAssistant videoTrack:", videoTrack ? "YES" : "null");
+    console.log("[AVATAR] allTracks:", allTracks.map(t => ({
+      identity: t.participant.identity,
+      source: t.source,
+      isLocal: t.participant.isLocal,
+    })));
+    console.log("[AVATAR] hedraVideoTrack:", hedraVideoTrack ? hedraVideoTrack.participant.identity : "NOT FOUND");
+    console.log("[AVATAR] activeVideoTrack:", activeVideoTrack ? "FOUND" : "NONE");
+  }, [agentState, videoTrack, allTracks, hedraVideoTrack, activeVideoTrack]);
 
   return (
     <div
