@@ -1,7 +1,8 @@
-livekit-agents[tavus]~=1.0
+requests
+aiohttp
+python-dotenv
+livekit-server-sdk
+livekit-agents
 livekit-plugins-deepgram
 livekit-plugins-openai
-livekit-plugins-elevenlabs
 livekit-plugins-silero
-requests
-python-dotenv
