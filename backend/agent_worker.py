@@ -1,7 +1,7 @@
 import logging
 import os
 from dotenv import load_dotenv
-from livekit.agents import AgentSession, RoomOutputOptions, JobContext, WorkerOptions, WorkerType, cli
+from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, WorkerType, cli
 from livekit.plugins import tavus, deepgram, openai, elevenlabs, silero
 
 load_dotenv(".env.local")
@@ -27,6 +27,16 @@ async def entrypoint(ctx: JobContext):
         ),
     )
 
+    # Create agent with instructions
+    agent = Agent(
+        instructions=(
+            "You are Emirati AI, the official AI assistant for OryxAI Solutions in Abu Dhabi, UAE. "
+            "You speak Arabic, English, and French fluently. "
+            "Respond in the user's language in 2-4 sentences. "
+            "Be warm, professional, and helpful."
+        )
+    )
+
     # Create Tavus avatar
     logger.info("Creating Tavus avatar...")
     avatar = tavus.AvatarSession(
@@ -39,11 +49,11 @@ async def entrypoint(ctx: JobContext):
     await avatar.start(session, room=ctx.room)
     logger.info("✓ Tavus avatar started!")
 
-    # Start agent session (audio_enabled=False: Tavus handles audio)
+    # Start agent session WITH the agent parameter
     logger.info("Starting agent session...")
     await session.start(
+        agent=agent,
         room=ctx.room,
-        room_output_options=RoomOutputOptions(audio_enabled=False),
     )
     logger.info("✓ Agent session started!")
 
