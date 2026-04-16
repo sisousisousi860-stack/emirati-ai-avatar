@@ -8,13 +8,11 @@ import {
   DisconnectButton,
   RoomAudioRenderer,
   RoomContext,
-  VideoTrack,
   VoiceAssistantControlBar,
   useVoiceAssistant,
-  useTracks,
 } from "@livekit/components-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Room, RoomEvent, Track } from "livekit-client";
+import { Room, RoomEvent } from "livekit-client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ConnectionDetails } from "./api/connection-details/route";
 import { usePersonDetection } from "@hooks/usePersonDetection";
@@ -402,34 +400,8 @@ function KioskPanel(props: {
 }
 
 function AvatarPanel() {
-  const { state: agentState, videoTrack, audioTrack } = useVoiceAssistant();
-
-  // Direct track subscription — find Hedra's video track by participant identity
-  const allTracks = useTracks(
-    [{ source: Track.Source.Camera, withPlaceholder: false }],
-    { onlySubscribed: false }
-  );
-  const hedraVideoTrack = allTracks.find(
-    (t) => t.participant.identity.includes("hedra") && t.source === Track.Source.Camera
-  );
-  // Fallback: any remote video track
-  const anyRemoteVideo = allTracks.find(
-    (t) => !t.participant.isLocal
-  );
-
-  const activeVideoTrack = videoTrack ?? (hedraVideoTrack?.publication ? hedraVideoTrack : undefined) ?? (anyRemoteVideo?.publication ? anyRemoteVideo : undefined);
-
-  useEffect(() => {
-    console.log("[AVATAR] agentState:", agentState);
-    console.log("[AVATAR] useVoiceAssistant videoTrack:", videoTrack ? "YES" : "null");
-    console.log("[AVATAR] allTracks:", allTracks.map(t => ({
-      identity: t.participant.identity,
-      source: t.source,
-      isLocal: t.participant.isLocal,
-    })));
-    console.log("[AVATAR] hedraVideoTrack:", hedraVideoTrack ? hedraVideoTrack.participant.identity : "NOT FOUND");
-    console.log("[AVATAR] activeVideoTrack:", activeVideoTrack ? "FOUND" : "NONE");
-  }, [agentState, videoTrack, allTracks, hedraVideoTrack, activeVideoTrack]);
+  const { state: agentState, audioTrack } = useVoiceAssistant();
+  const isSpeaking = agentState === "speaking" || agentState === "thinking";
 
   return (
     <div
@@ -447,19 +419,34 @@ function AvatarPanel() {
         <span className="text-[10px] font-bold tracking-widest" style={{ color: "rgba(255,255,255,0.65)" }}>LIVE</span>
       </div>
 
-      {activeVideoTrack ? (
-        <VideoTrack trackRef={activeVideoTrack} className="w-full h-full object-contain" />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center">
-          <BarVisualizer
-            state={agentState}
-            barCount={9}
-            trackRef={audioTrack}
-            className="agent-visualizer w-full px-10"
-            options={{ minHeight: 18 }}
-          />
-        </div>
+      {/* Animated avatar image */}
+      <img
+        src="/avatar.jpg"
+        alt="Emirati AI Avatar"
+        className={`w-full h-full object-cover transition-all duration-500 ${
+          isSpeaking ? "scale-[1.04] brightness-110" : "scale-100 brightness-100"
+        }`}
+      />
+
+      {/* Gold glow ring when speaking */}
+      {isSpeaking && (
+        <div
+          className="absolute inset-0 rounded-2xl pointer-events-none animate-pulse"
+          style={{ boxShadow: "inset 0 0 40px rgba(201,168,76,0.55), 0 0 20px rgba(201,168,76,0.4)" }}
+        />
       )}
+
+      {/* Voice visualizer overlay */}
+      <div className="absolute bottom-0 left-0 right-0 p-3"
+        style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85), transparent)" }}>
+        <BarVisualizer
+          state={agentState}
+          barCount={7}
+          trackRef={audioTrack}
+          className="agent-visualizer w-full"
+          options={{ minHeight: 18 }}
+        />
+      </div>
     </div>
   );
 }
