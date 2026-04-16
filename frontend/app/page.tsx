@@ -8,11 +8,13 @@ import {
   DisconnectButton,
   RoomAudioRenderer,
   RoomContext,
+  VideoTrack,
   VoiceAssistantControlBar,
   useVoiceAssistant,
+  useTracks,
 } from "@livekit/components-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Room, RoomEvent } from "livekit-client";
+import { Room, RoomEvent, Track } from "livekit-client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ConnectionDetails } from "./api/connection-details/route";
 import { usePersonDetection } from "@hooks/usePersonDetection";
@@ -400,8 +402,19 @@ function KioskPanel(props: {
 }
 
 function AvatarPanel() {
-  const { state: agentState, audioTrack } = useVoiceAssistant();
+  const { state: agentState, videoTrack, audioTrack } = useVoiceAssistant();
   const isSpeaking = agentState === "speaking" || agentState === "thinking";
+
+  // Fallback: find any remote video track (Tavus publishes via LiveKit)
+  const allTracks = useTracks(
+    [{ source: Track.Source.Camera, withPlaceholder: false }],
+    { onlySubscribed: true }
+  );
+  const remoteVideo = allTracks.find(
+    (t) => !t.participant.isLocal && t.publication?.kind === Track.Kind.Video
+  );
+  const activeVideo =
+    videoTrack ?? (remoteVideo?.publication ? remoteVideo : undefined);
 
   return (
     <div
@@ -419,14 +432,17 @@ function AvatarPanel() {
         <span className="text-[10px] font-bold tracking-widest" style={{ color: "rgba(255,255,255,0.65)" }}>LIVE</span>
       </div>
 
-      {/* Animated avatar image */}
-      <img
-        src="/avatar.jpg"
-        alt="Emirati AI Avatar"
-        className={`w-full h-full object-cover transition-all duration-500 ${
-          isSpeaking ? "scale-[1.04] brightness-110" : "scale-100 brightness-100"
-        }`}
-      />
+      {activeVideo ? (
+        <VideoTrack trackRef={activeVideo} className="w-full h-full object-cover" />
+      ) : (
+        <img
+          src="/avatar.jpg"
+          alt="Emirati AI Avatar"
+          className={`w-full h-full object-cover transition-all duration-500 ${
+            isSpeaking ? "scale-[1.04] brightness-110" : "scale-100 brightness-100"
+          }`}
+        />
+      )}
 
       {/* Gold glow ring when speaking */}
       {isSpeaking && (
@@ -436,17 +452,19 @@ function AvatarPanel() {
         />
       )}
 
-      {/* Voice visualizer overlay */}
-      <div className="absolute bottom-0 left-0 right-0 p-3"
-        style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85), transparent)" }}>
-        <BarVisualizer
-          state={agentState}
-          barCount={7}
-          trackRef={audioTrack}
-          className="agent-visualizer w-full"
-          options={{ minHeight: 18 }}
-        />
-      </div>
+      {/* Voice visualizer overlay (only when showing static image) */}
+      {!activeVideo && (
+        <div className="absolute bottom-0 left-0 right-0 p-3"
+          style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85), transparent)" }}>
+          <BarVisualizer
+            state={agentState}
+            barCount={7}
+            trackRef={audioTrack}
+            className="agent-visualizer w-full"
+            options={{ minHeight: 18 }}
+          />
+        </div>
+      )}
     </div>
   );
 }
