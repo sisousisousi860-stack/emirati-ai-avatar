@@ -13,7 +13,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
 COPY agent_worker.py .
-COPY heygen_liveavatar.py .
 COPY avatar.jpg .
 
 # Run the agent

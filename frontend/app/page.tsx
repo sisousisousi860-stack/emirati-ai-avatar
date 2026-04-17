@@ -8,16 +8,15 @@ import {
   DisconnectButton,
   RoomAudioRenderer,
   RoomContext,
-  VideoTrack,
   VoiceAssistantControlBar,
   useVoiceAssistant,
-  useTracks,
 } from "@livekit/components-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Room, RoomEvent, Track } from "livekit-client";
+import { Room, RoomEvent, DataPacket_Kind } from "livekit-client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ConnectionDetails } from "./api/connection-details/route";
 import { usePersonDetection } from "@hooks/usePersonDetection";
+import { useHeyGenAvatar } from "@hooks/useHeyGenAvatar";
 
 export default function Page() {
   const [room] = useState(new Room());
@@ -270,6 +269,7 @@ export default function Page() {
             detectionReady={detectionReady}
             recognizedName={recognizedName}
             roomConnected={roomConnected}
+            room={room}
           />
         </RoomContext.Provider>
       </div>
@@ -314,8 +314,33 @@ function KioskPanel(props: {
   detectionReady: boolean;
   recognizedName: string | null;
   roomConnected: boolean;
+  room: Room;
 }) {
   const { state: agentState } = useVoiceAssistant();
+  const heygenVideoRef = useRef<HTMLVideoElement>(null);
+  const heygen = useHeyGenAvatar(heygenVideoRef);
+
+  // Start HeyGen when LiveKit connects
+  useEffect(() => {
+    if (agentState !== "disconnected" && heygen.state === "idle") {
+      heygen.start();
+    }
+  }, [agentState, heygen]);
+
+  // Listen for LLM responses from backend data channel → speak via HeyGen
+  useEffect(() => {
+    const onData = (data: Uint8Array) => {
+      try {
+        const msg = JSON.parse(new TextDecoder().decode(data));
+        if (msg.type === "llm_response" && msg.text) {
+          console.log("[HeyGen] Speaking LLM response:", msg.text.slice(0, 60));
+          heygen.speak(msg.text);
+        }
+      } catch (_) {}
+    };
+    props.room.on(RoomEvent.DataReceived, onData);
+    return () => { props.room.off(RoomEvent.DataReceived, onData); };
+  }, [props.room, heygen]);
 
   return (
     <AnimatePresence mode="wait">
@@ -387,8 +412,8 @@ function KioskPanel(props: {
           transition={{ duration: 0.25 }}
           className="flex flex-col gap-3 min-h-0 flex-1"
         >
-          {/* Avatar */}
-          <AvatarPanel />
+          {/* HeyGen Avatar */}
+          <AvatarPanel videoRef={heygenVideoRef} heygenState={heygen.state} />
           {/* Chat */}
           <ChatPanel />
           {/* Controls */}
@@ -401,20 +426,13 @@ function KioskPanel(props: {
   );
 }
 
-function AvatarPanel() {
-  const { state: agentState, videoTrack, audioTrack } = useVoiceAssistant();
-  const isSpeaking = agentState === "speaking" || agentState === "thinking";
-
-  // Fallback: find any remote video track (Tavus publishes via LiveKit)
-  const allTracks = useTracks(
-    [{ source: Track.Source.Camera, withPlaceholder: false }],
-    { onlySubscribed: true }
-  );
-  const remoteVideo = allTracks.find(
-    (t) => !t.participant.isLocal && t.publication?.kind === Track.Kind.Video
-  );
-  const activeVideo =
-    videoTrack ?? (remoteVideo?.publication ? remoteVideo : undefined);
+function AvatarPanel({ videoRef, heygenState }: {
+  videoRef: React.RefObject<HTMLVideoElement | null>;
+  heygenState: string;
+}) {
+  const { state: agentState, audioTrack } = useVoiceAssistant();
+  const isSpeaking = heygenState === "speaking" || agentState === "speaking";
+  const isConnected = heygenState === "connected" || heygenState === "speaking";
 
   return (
     <div
@@ -432,9 +450,17 @@ function AvatarPanel() {
         <span className="text-[10px] font-bold tracking-widest" style={{ color: "rgba(255,255,255,0.65)" }}>LIVE</span>
       </div>
 
-      {activeVideo ? (
-        <VideoTrack trackRef={activeVideo} className="w-full h-full object-cover" />
-      ) : (
+      {/* HeyGen video stream (always in DOM, hidden until connected) */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        className="w-full h-full object-cover"
+        style={{ display: isConnected ? "block" : "none" }}
+      />
+
+      {/* Static fallback when HeyGen not ready */}
+      {!isConnected && (
         <img
           src="/avatar.jpg"
           alt="Emirati AI Avatar"
@@ -452,8 +478,17 @@ function AvatarPanel() {
         />
       )}
 
-      {/* Voice visualizer overlay (only when showing static image) */}
-      {!activeVideo && (
+      {/* Loading indicator */}
+      {heygenState === "loading" && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+          <div className="text-sm" style={{ color: "rgba(201,168,76,0.7)" }}>
+            Loading avatar...
+          </div>
+        </div>
+      )}
+
+      {/* Voice visualizer (only when showing static image) */}
+      {!isConnected && (
         <div className="absolute bottom-0 left-0 right-0 p-3"
           style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85), transparent)" }}>
           <BarVisualizer
