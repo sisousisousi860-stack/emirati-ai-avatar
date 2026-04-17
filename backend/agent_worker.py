@@ -65,6 +65,9 @@ async def entrypoint(ctx: JobContext):
         except Exception as e:
             logger.warning(f"Failed to forward LLM response: {e}")
 
+    # Disable audio output — HeyGen handles TTS on the frontend
+    session.output.set_audio_enabled(False)
+
     logger.info("Starting agent session (STT + LLM only, no TTS)...")
     await session.start(agent=agent, room=ctx.room)
     logger.info("✓ Agent session started!")
