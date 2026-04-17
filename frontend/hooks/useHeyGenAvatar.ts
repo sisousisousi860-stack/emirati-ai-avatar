@@ -8,9 +8,8 @@ import StreamingAvatar, {
   TaskMode,
 } from "@heygen/streaming-avatar";
 
-// TODO: Replace with your real IDs from HeyGen dashboard
-const HEYGEN_AVATAR_ID = process.env.NEXT_PUBLIC_HEYGEN_AVATAR_ID || "REPLACE_WITH_AVATAR_ID";
-const HEYGEN_VOICE_ID = process.env.NEXT_PUBLIC_HEYGEN_VOICE_ID || "REPLACE_WITH_VOICE_ID";
+const HEYGEN_AVATAR_ID = process.env.NEXT_PUBLIC_HEYGEN_AVATAR_ID || "cc34b83ccaf948a38092feed25f25d8d";
+const HEYGEN_VOICE_ID = process.env.NEXT_PUBLIC_HEYGEN_VOICE_ID || "997f0279afba4e1998e89d90becca013";
 
 export type HeyGenState = "idle" | "loading" | "connected" | "speaking" | "error";
 
