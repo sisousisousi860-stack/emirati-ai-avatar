@@ -319,28 +319,35 @@ function KioskPanel(props: {
   const { state: agentState } = useVoiceAssistant();
   const heygenVideoRef = useRef<HTMLVideoElement>(null);
   const heygen = useHeyGenAvatar(heygenVideoRef);
+  const heygenRef = useRef(heygen);
+  heygenRef.current = heygen;
 
   // Start HeyGen when LiveKit connects
+  const heygenStarted = useRef(false);
   useEffect(() => {
-    if (agentState !== "disconnected" && heygen.state === "idle") {
-      heygen.start();
+    if (agentState !== "disconnected" && !heygenStarted.current) {
+      heygenStarted.current = true;
+      console.log("[KioskPanel] Agent connected, starting HeyGen...");
+      heygenRef.current.start();
     }
-  }, [agentState, heygen]);
+  }, [agentState]);
 
   // Listen for LLM responses from backend data channel → speak via HeyGen
   useEffect(() => {
-    const onData = (data: Uint8Array) => {
+    const onData = (payload: Uint8Array) => {
       try {
-        const msg = JSON.parse(new TextDecoder().decode(data));
+        const msg = JSON.parse(new TextDecoder().decode(payload));
         if (msg.type === "llm_response" && msg.text) {
-          console.log("[HeyGen] Speaking LLM response:", msg.text.slice(0, 60));
-          heygen.speak(msg.text);
+          console.log("[KioskPanel] LLM response received, sending to HeyGen:", msg.text.slice(0, 60));
+          heygenRef.current.speak(msg.text);
         }
-      } catch (_) {}
+      } catch (e) {
+        console.error("[KioskPanel] Data parse error:", e);
+      }
     };
     props.room.on(RoomEvent.DataReceived, onData);
     return () => { props.room.off(RoomEvent.DataReceived, onData); };
-  }, [props.room, heygen]);
+  }, [props.room]);
 
   return (
     <AnimatePresence mode="wait">
