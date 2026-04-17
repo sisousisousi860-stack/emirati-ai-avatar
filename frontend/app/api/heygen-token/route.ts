@@ -6,7 +6,7 @@ export async function GET() {
     return NextResponse.json({ error: "HEYGEN_API_KEY not set" }, { status: 500 });
   }
 
-  const resp = await fetch("https://api.heygen.com/v1/streaming.create_token", {
+  const resp = await fetch("https://api.heygen.com/v1/streaming/create_token", {
     method: "POST",
     headers: { "x-api-key": apiKey },
   });
