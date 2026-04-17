@@ -8,7 +8,7 @@ import StreamingAvatar, {
   TaskMode,
 } from "@heygen/streaming-avatar";
 
-const HEYGEN_AVATAR_ID = process.env.NEXT_PUBLIC_HEYGEN_AVATAR_ID || "cc34b83ccaf948a38092feed25f25d8d";
+const HEYGEN_AVATAR_ID = process.env.NEXT_PUBLIC_HEYGEN_AVATAR_ID || "a23e89867d06431ba1736ddd06c031e6";
 const HEYGEN_VOICE_ID = process.env.NEXT_PUBLIC_HEYGEN_VOICE_ID || "997f0279afba4e1998e89d90becca013";
 
 export type HeyGenState = "idle" | "loading" | "connected" | "speaking" | "error";
