@@ -8,7 +8,7 @@ import StreamingAvatar, {
   TaskMode,
 } from "@heygen/streaming-avatar";
 
-const HEYGEN_AVATAR_ID = process.env.NEXT_PUBLIC_HEYGEN_AVATAR_ID || "a23e89867d06431ba1736ddd06c031e6";
+const HEYGEN_AVATAR_ID = process.env.NEXT_PUBLIC_HEYGEN_AVATAR_ID || "0930fd59-c8ad-434d-ad53-b391a1768720";
 const HEYGEN_VOICE_ID = process.env.NEXT_PUBLIC_HEYGEN_VOICE_ID || "997f0279afba4e1998e89d90becca013";
 
 export type HeyGenState = "idle" | "loading" | "connected" | "speaking" | "error";
@@ -23,17 +23,22 @@ export function useHeyGenAvatar(videoRef: React.RefObject<HTMLVideoElement | nul
     setState("loading");
 
     try {
-      // Get session token from our API route
+      // Get session token from our API route (LiveAvatar API)
+      console.log("[HeyGen] Fetching session token...");
       const tokenResp = await fetch("/api/heygen-token");
-      if (!tokenResp.ok) throw new Error("Failed to get HeyGen token");
-      const { token } = await tokenResp.json();
+      if (!tokenResp.ok) {
+        const err = await tokenResp.text();
+        throw new Error(`Token fetch failed: ${tokenResp.status} ${err}`);
+      }
+      const { token, session_id } = await tokenResp.json();
+      console.log("[HeyGen] Got token, session:", session_id);
 
       const avatar = new StreamingAvatar({ token });
       avatarRef.current = avatar;
 
       // Listen for stream ready
       avatar.on(StreamingEvents.STREAM_READY, (event: any) => {
-        console.log("[HeyGen] Stream ready");
+        console.log("[HeyGen] Stream ready — attaching video");
         if (videoRef.current && event.detail) {
           videoRef.current.srcObject = event.detail as MediaStream;
           videoRef.current.play().catch(console.error);
@@ -55,20 +60,26 @@ export function useHeyGenAvatar(videoRef: React.RefObject<HTMLVideoElement | nul
         avatarRef.current = null;
       });
 
-      // Start avatar session with ElevenLabs voice
-      const sessionInfo = await avatar.createStartAvatar({
-        quality: AvatarQuality.Medium,
-        avatarName: HEYGEN_AVATAR_ID,
-        voice: {
-          voiceId: HEYGEN_VOICE_ID,
-          rate: 1.0,
-          emotion: "FRIENDLY" as any,
-        },
-        language: "ar",
-      });
-
-      setSessionId(sessionInfo?.session_id ?? null);
-      console.log("[HeyGen] Avatar started:", sessionInfo?.session_id);
+      // Start avatar — the token already contains avatar/voice config from LiveAvatar API
+      console.log("[HeyGen] Starting avatar session...");
+      try {
+        const sessionInfo = await avatar.createStartAvatar({
+          quality: AvatarQuality.Medium,
+          avatarName: HEYGEN_AVATAR_ID,
+          voice: {
+            voiceId: HEYGEN_VOICE_ID,
+            rate: 1.0,
+            emotion: "FRIENDLY" as any,
+          },
+          language: "ar",
+        });
+        setSessionId(sessionInfo?.session_id ?? session_id);
+        console.log("[HeyGen] Avatar started:", sessionInfo?.session_id);
+      } catch (startErr) {
+        console.warn("[HeyGen] createStartAvatar failed, session may already be started:", startErr);
+        setSessionId(session_id);
+        setState("connected");
+      }
     } catch (err) {
       console.error("[HeyGen] Start error:", err);
       setState("error");
@@ -76,8 +87,12 @@ export function useHeyGenAvatar(videoRef: React.RefObject<HTMLVideoElement | nul
   }, [videoRef]);
 
   const speak = useCallback(async (text: string) => {
-    if (!avatarRef.current) return;
+    if (!avatarRef.current) {
+      console.warn("[HeyGen] speak called but no avatar instance");
+      return;
+    }
     try {
+      console.log("[HeyGen] Speaking:", text.slice(0, 60));
       await avatarRef.current.speak({
         text,
         taskType: TaskType.REPEAT,
@@ -109,7 +124,6 @@ export function useHeyGenAvatar(videoRef: React.RefObject<HTMLVideoElement | nul
     setSessionId(null);
   }, []);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (avatarRef.current) {
