@@ -13,43 +13,74 @@ const VOICE_ID = "997f0279afba4e1998e89d90becca013";
 
 export type AvatarState = "idle" | "loading" | "connected" | "speaking" | "error";
 
-export function useHeyGenAvatar(videoRef: React.RefObject<HTMLVideoElement | null>) {
+export function useHeyGenAvatar() {
   const avatarRef = useRef<StreamingAvatar | null>(null);
   const [state, setState] = useState<AvatarState>("idle");
+  const [error, setError] = useState<string | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  const attachStream = useCallback(() => {
+    if (videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(console.error);
+    }
+  }, []);
+
+  const setVideoRef = useCallback((el: HTMLVideoElement | null) => {
+    videoRef.current = el;
+    if (el && streamRef.current) {
+      el.srcObject = streamRef.current;
+      el.play().catch(console.error);
+    }
+  }, []);
 
   const start = useCallback(async () => {
     if (avatarRef.current) return;
     setState("loading");
+    setError(null);
 
     try {
+      console.log("[LiveAvatar] Fetching token...");
       const tokenResp = await fetch("/api/heygen-token", { method: "POST" });
       if (!tokenResp.ok) {
         const err = await tokenResp.text();
         throw new Error(`Token fetch failed: ${tokenResp.status} ${err}`);
       }
-      const { token } = await tokenResp.json();
+      const tokenData = await tokenResp.json();
+      console.log("[LiveAvatar] Token response:", JSON.stringify(tokenData).slice(0, 200));
 
-      const avatar = new StreamingAvatar({ token });
+      if (!tokenData.token) {
+        throw new Error(`No token in response: ${JSON.stringify(tokenData)}`);
+      }
+
+      const avatar = new StreamingAvatar({ token: tokenData.token });
       avatarRef.current = avatar;
 
       avatar.on(StreamingEvents.STREAM_READY, (event: any) => {
-        console.log("[LiveAvatar] Stream ready");
-        if (videoRef.current && event.detail) {
-          videoRef.current.srcObject = event.detail as MediaStream;
-          videoRef.current.play().catch(console.error);
-        }
+        console.log("[LiveAvatar] STREAM_READY fired");
+        streamRef.current = event.detail as MediaStream;
+        attachStream();
         setState("connected");
       });
 
-      avatar.on(StreamingEvents.AVATAR_START_TALKING, () => setState("speaking"));
-      avatar.on(StreamingEvents.AVATAR_STOP_TALKING, () => setState("connected"));
+      avatar.on(StreamingEvents.AVATAR_START_TALKING, () => {
+        console.log("[LiveAvatar] Avatar started talking");
+        setState("speaking");
+      });
+      avatar.on(StreamingEvents.AVATAR_STOP_TALKING, () => {
+        console.log("[LiveAvatar] Avatar stopped talking");
+        setState("connected");
+      });
       avatar.on(StreamingEvents.STREAM_DISCONNECTED, () => {
         console.log("[LiveAvatar] Stream disconnected");
+        streamRef.current = null;
         setState("idle");
         avatarRef.current = null;
       });
 
-      await avatar.createStartAvatar({
+      console.log("[LiveAvatar] Calling createStartAvatar...");
+      const sessionInfo = await avatar.createStartAvatar({
         avatarName: AVATAR_ID,
         quality: AvatarQuality.Medium,
         voice: {
@@ -59,16 +90,19 @@ export function useHeyGenAvatar(videoRef: React.RefObject<HTMLVideoElement | nul
         },
         language: "ar",
       });
-      console.log("[LiveAvatar] Avatar started");
-    } catch (err) {
+      console.log("[LiveAvatar] Avatar started, session:", sessionInfo);
+    } catch (err: any) {
       console.error("[LiveAvatar] Start error:", err);
+      setError(err.message || String(err));
       setState("error");
+      avatarRef.current = null;
     }
-  }, [videoRef]);
+  }, [attachStream]);
 
   const speak = useCallback(async (text: string) => {
     if (!avatarRef.current) return;
     try {
+      console.log("[LiveAvatar] Speaking:", text.slice(0, 80));
       await avatarRef.current.speak({
         text,
         taskType: TaskType.REPEAT,
@@ -96,6 +130,7 @@ export function useHeyGenAvatar(videoRef: React.RefObject<HTMLVideoElement | nul
       console.error("[LiveAvatar] Stop error:", err);
     }
     avatarRef.current = null;
+    streamRef.current = null;
     setState("idle");
   }, []);
 
@@ -108,5 +143,5 @@ export function useHeyGenAvatar(videoRef: React.RefObject<HTMLVideoElement | nul
     };
   }, []);
 
-  return { state, start, speak, interrupt, stop };
+  return { state, error, setVideoRef, start, speak, interrupt, stop };
 }

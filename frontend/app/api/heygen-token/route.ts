@@ -20,5 +20,11 @@ export async function POST() {
   }
 
   const data = await resp.json();
-  return NextResponse.json({ token: data.data.session_token });
+  console.log("[liveavatar-token] Response keys:", JSON.stringify(Object.keys(data)));
+  const token = data?.data?.session_token ?? data?.session_token ?? data?.token;
+  if (!token) {
+    console.error("[liveavatar-token] No token found in response:", JSON.stringify(data).slice(0, 500));
+    return NextResponse.json({ error: "No token in API response", raw: data }, { status: 502 });
+  }
+  return NextResponse.json({ token });
 }

@@ -34,13 +34,14 @@ export default function Page() {
   const [recognizedName, setRecognizedName] = useState<string | null>(null);
 
   // LiveAvatar streaming avatar
-  const avatarVideoRef = useRef<HTMLVideoElement>(null);
   const {
     state: avatarState,
+    error: avatarError,
+    setVideoRef: setAvatarVideoRef,
     start: startAvatar,
     speak: avatarSpeak,
     stop: stopAvatar,
-  } = useHeyGenAvatar(avatarVideoRef);
+  } = useHeyGenAvatar();
   const avatarSpeakRef = useRef(avatarSpeak);
   useEffect(() => { avatarSpeakRef.current = avatarSpeak; }, [avatarSpeak]);
 
@@ -285,8 +286,9 @@ export default function Page() {
             detectionReady={detectionReady}
             recognizedName={recognizedName}
             roomConnected={roomConnected}
-            avatarVideoRef={avatarVideoRef}
+            setAvatarVideoRef={setAvatarVideoRef}
             avatarState={avatarState}
+            avatarError={avatarError}
           />
         </RoomContext.Provider>
       </div>
@@ -331,8 +333,9 @@ function KioskPanel(props: {
   detectionReady: boolean;
   recognizedName: string | null;
   roomConnected: boolean;
-  avatarVideoRef: React.RefObject<HTMLVideoElement | null>;
+  setAvatarVideoRef: (el: HTMLVideoElement | null) => void;
   avatarState: string;
+  avatarError: string | null;
 }) {
   const { state: agentState } = useVoiceAssistant();
 
@@ -407,8 +410,9 @@ function KioskPanel(props: {
           className="flex flex-col gap-3 min-h-0 flex-1"
         >
           <AvatarPanel
-            avatarVideoRef={props.avatarVideoRef}
+            setAvatarVideoRef={props.setAvatarVideoRef}
             avatarState={props.avatarState}
+            avatarError={props.avatarError}
           />
           <ChatPanel />
           <ControlBar />
@@ -420,11 +424,13 @@ function KioskPanel(props: {
 }
 
 function AvatarPanel({
-  avatarVideoRef,
+  setAvatarVideoRef,
   avatarState,
+  avatarError,
 }: {
-  avatarVideoRef: React.RefObject<HTMLVideoElement | null>;
+  setAvatarVideoRef: (el: HTMLVideoElement | null) => void;
   avatarState: string;
+  avatarError: string | null;
 }) {
   const { state: agentState, audioTrack } = useVoiceAssistant();
   const isSpeaking = avatarState === "speaking" || agentState === "speaking";
@@ -446,9 +452,21 @@ function AvatarPanel({
         <span className="text-[10px] font-bold tracking-widest" style={{ color: "rgba(255,255,255,0.65)" }}>LIVE</span>
       </div>
 
+      {/* Avatar status overlay */}
+      {(avatarState === "loading" || avatarState === "error") && (
+        <div className="absolute top-3 left-3 z-10 rounded-lg px-2.5 py-1"
+          style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}>
+          <span className="text-[10px] font-medium" style={{
+            color: avatarState === "error" ? "#ef4444" : "#C9A84C"
+          }}>
+            {avatarState === "loading" ? "Connecting avatar..." : `Avatar error: ${avatarError}`}
+          </span>
+        </div>
+      )}
+
       {/* LiveAvatar streaming video */}
       <video
-        ref={avatarVideoRef as React.RefObject<HTMLVideoElement>}
+        ref={setAvatarVideoRef}
         className="w-full h-full object-cover"
         style={{ display: avatarReady ? "block" : "none" }}
         autoPlay
