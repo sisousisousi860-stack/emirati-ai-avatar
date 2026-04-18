@@ -6,18 +6,16 @@ import TranscriptionView from "@components/TranscriptionView";
 import {
   BarVisualizer,
   DisconnectButton,
-  RoomAudioRenderer,
   RoomContext,
-  VideoTrack,
   VoiceAssistantControlBar,
   useVoiceAssistant,
-  useTracks,
 } from "@livekit/components-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Room, RoomEvent, Track } from "livekit-client";
+import { Room, RoomEvent } from "livekit-client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ConnectionDetails } from "./api/connection-details/route";
 import { usePersonDetection } from "@hooks/usePersonDetection";
+import { useHeyGenAvatar } from "@hooks/useHeyGenAvatar";
 
 export default function Page() {
   const [room] = useState(new Room());
@@ -34,6 +32,17 @@ export default function Page() {
   const prefetchedConnRef = useRef<ConnectionDetails | null>(null);
   const recognizedNameRef = useRef<string | null>(null);
   const [recognizedName, setRecognizedName] = useState<string | null>(null);
+
+  // LiveAvatar streaming avatar
+  const avatarVideoRef = useRef<HTMLVideoElement>(null);
+  const {
+    state: avatarState,
+    start: startAvatar,
+    speak: avatarSpeak,
+    stop: stopAvatar,
+  } = useHeyGenAvatar(avatarVideoRef);
+  const avatarSpeakRef = useRef(avatarSpeak);
+  useEffect(() => { avatarSpeakRef.current = avatarSpeak; }, [avatarSpeak]);
 
   useEffect(() => { roomConnectedRef.current = roomConnected; }, [roomConnected]);
 
@@ -58,10 +67,17 @@ export default function Page() {
 
   // ── Language detection from transcription ─────────────────────────────────
   useEffect(() => {
-    const onTranscription = (segments: any[]) => {
+    const onTranscription = (segments: any[], participant: any) => {
       const text = segments.map((s: any) => s.text ?? "").join(" ");
       const hasArabic = /[\u0600-\u06FF]/.test(text);
       setDetectedLang(hasArabic ? "AR" : "EN");
+
+      // Forward agent text to LiveAvatar for lip-sync
+      const isAgent = participant && !participant.isLocal;
+      const isFinal = segments.some((s: any) => s.final);
+      if (isAgent && isFinal && text.trim()) {
+        avatarSpeakRef.current(text.trim());
+      }
     };
     room.on(RoomEvent.TranscriptionReceived, onTranscription);
     return () => { room.off(RoomEvent.TranscriptionReceived, onTranscription); };
@@ -91,6 +107,9 @@ export default function Page() {
         }
       }
 
+      // Start LiveAvatar streaming avatar
+      startAvatar();
+
       let connectionDetailsData = prefetchedConnRef.current;
       prefetchedConnRef.current = null;
       if (!connectionDetailsData) {
@@ -117,7 +136,7 @@ export default function Page() {
       console.error("Connection error:", error);
       connectingRef.current = false;
     }
-  }, [room, audioInitialized]);
+  }, [room, audioInitialized, startAvatar]);
 
   // ── Room events ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -129,26 +148,22 @@ export default function Page() {
         .publishData(new TextEncoder().encode(payload), { reliable: true })
         .catch(() => {});
     };
-    const onDisconnected = () => { setRoomConnected(false); connectingRef.current = false; };
+    const onDisconnected = () => {
+      setRoomConnected(false);
+      connectingRef.current = false;
+      stopAvatar();
+    };
 
     room.on(RoomEvent.Connected, onConnected);
     room.on(RoomEvent.Disconnected, onDisconnected);
     room.on(RoomEvent.MediaDevicesError, onDeviceFailure);
-    room.on(RoomEvent.TrackSubscribed, (track) => {
-      if (track.kind === "audio" && track.mediaStreamTrack) {
-        const el = track.attach();
-        el.play().catch(() => {
-          document.addEventListener("touchstart", () => el.play().catch(console.error), { once: true });
-        });
-      }
-    });
 
     return () => {
       room.off(RoomEvent.Connected, onConnected);
       room.off(RoomEvent.Disconnected, onDisconnected);
       room.off(RoomEvent.MediaDevicesError, onDeviceFailure);
     };
-  }, [room]);
+  }, [room, stopAvatar]);
 
   // ── Person detection ──────────────────────────────────────────────────────
   usePersonDetection(cameraVideoRef, {
@@ -270,6 +285,8 @@ export default function Page() {
             detectionReady={detectionReady}
             recognizedName={recognizedName}
             roomConnected={roomConnected}
+            avatarVideoRef={avatarVideoRef}
+            avatarState={avatarState}
           />
         </RoomContext.Provider>
       </div>
@@ -314,6 +331,8 @@ function KioskPanel(props: {
   detectionReady: boolean;
   recognizedName: string | null;
   roomConnected: boolean;
+  avatarVideoRef: React.RefObject<HTMLVideoElement | null>;
+  avatarState: string;
 }) {
   const { state: agentState } = useVoiceAssistant();
 
@@ -387,10 +406,12 @@ function KioskPanel(props: {
           transition={{ duration: 0.25 }}
           className="flex flex-col gap-3 min-h-0 flex-1"
         >
-          <AvatarPanel />
+          <AvatarPanel
+            avatarVideoRef={props.avatarVideoRef}
+            avatarState={props.avatarState}
+          />
           <ChatPanel />
           <ControlBar />
-          <RoomAudioRenderer />
           <NoAgentNotification state={agentState} />
         </motion.div>
       )}
@@ -398,20 +419,16 @@ function KioskPanel(props: {
   );
 }
 
-function AvatarPanel() {
-  const { state: agentState, videoTrack, audioTrack } = useVoiceAssistant();
-  const isSpeaking = agentState === "speaking" || agentState === "thinking";
-
-  // Fallback: find any remote video track (LiveAvatar publishes via LiveKit)
-  const allTracks = useTracks(
-    [{ source: Track.Source.Camera, withPlaceholder: false }],
-    { onlySubscribed: true }
-  );
-  const remoteVideo = allTracks.find(
-    (t) => !t.participant.isLocal && t.publication?.kind === Track.Kind.Video
-  );
-  const activeVideo =
-    videoTrack ?? (remoteVideo?.publication ? remoteVideo : undefined);
+function AvatarPanel({
+  avatarVideoRef,
+  avatarState,
+}: {
+  avatarVideoRef: React.RefObject<HTMLVideoElement | null>;
+  avatarState: string;
+}) {
+  const { state: agentState, audioTrack } = useVoiceAssistant();
+  const isSpeaking = avatarState === "speaking" || agentState === "speaking";
+  const avatarReady = avatarState === "connected" || avatarState === "speaking";
 
   return (
     <div
@@ -429,9 +446,17 @@ function AvatarPanel() {
         <span className="text-[10px] font-bold tracking-widest" style={{ color: "rgba(255,255,255,0.65)" }}>LIVE</span>
       </div>
 
-      {activeVideo ? (
-        <VideoTrack trackRef={activeVideo} className="w-full h-full object-cover" />
-      ) : (
+      {/* LiveAvatar streaming video */}
+      <video
+        ref={avatarVideoRef as React.RefObject<HTMLVideoElement>}
+        className="w-full h-full object-cover"
+        style={{ display: avatarReady ? "block" : "none" }}
+        autoPlay
+        playsInline
+      />
+
+      {/* Fallback static image */}
+      {!avatarReady && (
         <img
           src="/avatar.jpg"
           alt="Emirati AI Avatar"
@@ -450,7 +475,7 @@ function AvatarPanel() {
       )}
 
       {/* Voice visualizer (only when showing static image) */}
-      {!activeVideo && (
+      {!avatarReady && (
         <div className="absolute bottom-0 left-0 right-0 p-3"
           style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85), transparent)" }}>
           <BarVisualizer

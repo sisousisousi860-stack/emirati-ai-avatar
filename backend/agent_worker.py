@@ -1,14 +1,13 @@
 """
-LiveKit voice-AI agent with LiveAvatar lip-sync.
+LiveKit voice-AI agent — STT + LLM only.
 
-Audio pipeline:  mic → Deepgram STT → GPT-4o-mini → ElevenLabs TTS → LiveAvatar lip-sync
-LiveAvatar renders the avatar video and publishes it to the LiveKit room.
+Audio pipeline:  mic → Deepgram STT → GPT-4o-mini → ElevenLabs TTS
+Avatar lip-sync is handled on the frontend via LiveAvatar streaming SDK.
 """
 import logging
-import os
 from dotenv import load_dotenv
 from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, WorkerType, cli
-from livekit.plugins import deepgram, openai, elevenlabs, silero, liveavatar
+from livekit.plugins import deepgram, openai, elevenlabs, silero
 
 load_dotenv(".env.local")
 
@@ -47,16 +46,6 @@ async def entrypoint(ctx: JobContext):
             "Be warm, professional, and helpful."
         )
     )
-
-    # LiveAvatar for real-time lip-sync video
-    logger.info("Creating LiveAvatar session...")
-    avatar = liveavatar.AvatarSession(
-        avatar_id=os.getenv("LIVEAVATAR_AVATAR_ID", "0930fd59-c8ad-434d-ad53-b391a1768720"),
-    )
-
-    logger.info("Starting LiveAvatar...")
-    await avatar.start(session, room=ctx.room)
-    logger.info("LiveAvatar started!")
 
     logger.info("Starting agent session...")
     await session.start(agent=agent, room=ctx.room)

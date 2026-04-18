@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
+
+function hasDatabase() {
+  return !!process.env.DATABASE_URL;
+}
 
 // GET /api/faces — returns all registered people with their descriptors
 export async function GET() {
+  if (!hasDatabase()) {
+    return NextResponse.json([]);
+  }
+
+  const { getDb } = await import("@/lib/db");
   const client = await getDb().catch((e) => {
     console.error("[DB] Connection error:", e.message);
     throw e;
@@ -33,11 +41,16 @@ export async function GET() {
 // POST /api/faces — save one face descriptor
 // body: { name: string, descriptor: number[] }
 export async function POST(req: NextRequest) {
+  if (!hasDatabase()) {
+    return NextResponse.json({ error: "DATABASE_URL not configured" }, { status: 503 });
+  }
+
   const { name, descriptor } = await req.json();
   if (!name || !descriptor) {
     return NextResponse.json({ error: "name and descriptor required" }, { status: 400 });
   }
 
+  const { getDb } = await import("@/lib/db");
   const client = await getDb().catch((e) => {
     console.error("[DB] Connection error:", e.message);
     throw e;
@@ -56,9 +69,14 @@ export async function POST(req: NextRequest) {
 // DELETE /api/faces — remove all descriptors for a person
 // body: { name: string }
 export async function DELETE(req: NextRequest) {
+  if (!hasDatabase()) {
+    return NextResponse.json({ error: "DATABASE_URL not configured" }, { status: 503 });
+  }
+
   const { name } = await req.json();
   if (!name) return NextResponse.json({ error: "name required" }, { status: 400 });
 
+  const { getDb } = await import("@/lib/db");
   const client = await getDb();
   try {
     const { rowCount } = await client.query(
