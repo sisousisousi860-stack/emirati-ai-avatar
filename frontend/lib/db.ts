@@ -1,14 +1,23 @@
 import { Pool } from "pg";
 
-// Single connection pool reused across requests
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-});
+let pool: Pool | null = null;
 
-// Create table on first use
+function getPool(): Pool {
+  if (!pool) {
+    if (!process.env.DATABASE_URL) {
+      throw new Error("DATABASE_URL is not set");
+    }
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+    });
+  }
+  return pool;
+}
+
 export async function getDb() {
-  const client = await pool.connect();
+  const p = getPool();
+  const client = await p.connect();
   await client.query(`
     CREATE TABLE IF NOT EXISTS face_descriptors (
       id        SERIAL PRIMARY KEY,
@@ -20,4 +29,4 @@ export async function getDb() {
   return client;
 }
 
-export default pool;
+export default { getPool };
