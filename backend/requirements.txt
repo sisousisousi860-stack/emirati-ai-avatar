@@ -1,7 +1,8 @@
 python-dotenv
 livekit
 livekit-api
-livekit-agents
+livekit-agents[liveavatar]>=1.5.4
 livekit-plugins-deepgram
 livekit-plugins-openai
 livekit-plugins-silero
+livekit-plugins-elevenlabs
