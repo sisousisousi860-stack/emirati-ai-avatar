@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   }
 
   const resp = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
+    `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}?output_format=pcm_24000`,
     {
       method: "POST",
       headers: {

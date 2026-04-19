@@ -96,8 +96,11 @@ export function useLiveAvatar() {
         console.error("[LiveAvatar] TTS failed:", res.status);
         return;
       }
-      const { audio } = await res.json();
-      await sessionRef.current.repeatAudio(audio);
+      const { audio: base64Audio } = await res.json();
+      // Decode base64 to binary string (each char = one PCM byte)
+      const binaryString = atob(base64Audio);
+      console.log("[LiveAvatar] PCM audio size:", binaryString.length, "bytes");
+      sessionRef.current.repeatAudio(binaryString);
     } catch (err) {
       console.error("[LiveAvatar] Speak error:", err);
     }
