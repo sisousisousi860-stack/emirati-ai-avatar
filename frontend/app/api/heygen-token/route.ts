@@ -16,7 +16,7 @@ export async function POST() {
       avatar_id: "0930fd59-c8ad-434d-ad53-b391a1768720",
       avatar_persona: {
         voice_id: "997f0279afba4e1998e89d90becca013",
-        language: "ar",
+        language: "en",
         voice_settings: {
           provider: "elevenLabs",
           speed: 1,
@@ -25,9 +25,6 @@ export async function POST() {
           style: 0,
           use_speaker_boost: true,
           model: "eleven_flash_v2_5",
-        },
-        stt_config: {
-          provider: "deepgram",
         },
       },
       mode: "FULL",
