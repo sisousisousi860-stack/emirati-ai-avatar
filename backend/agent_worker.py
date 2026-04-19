@@ -20,7 +20,7 @@ async def entrypoint(ctx: JobContext):
     logger.info("Connected to LiveKit room")
 
     session = AgentSession(
-        stt=deepgram.STT(model="nova-3", language="ar"),
+        stt=deepgram.STT(model="nova-3", language="multi"),
         llm=openai.LLM(model="gpt-4o-mini", temperature=0.7),
         tts=elevenlabs.TTS(
             voice_id="TlKDNWnTobzVS4SXWTDi",
