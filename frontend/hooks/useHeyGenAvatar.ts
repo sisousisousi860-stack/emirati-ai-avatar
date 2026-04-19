@@ -83,33 +83,20 @@ export function useLiveAvatar() {
     }
   }, []);
 
-  const speak = useCallback(async (text: string) => {
+  const speak = useCallback((text: string) => {
     if (!sessionRef.current) return;
     try {
-      console.log("[LiveAvatar] TTS for:", text.slice(0, 60));
-      const res = await fetch("/api/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      if (!res.ok) {
-        console.error("[LiveAvatar] TTS failed:", res.status);
-        return;
-      }
-      const { audio: base64Audio } = await res.json();
-      // Decode base64 to binary string (each char = one PCM byte)
-      const binaryString = atob(base64Audio);
-      console.log("[LiveAvatar] PCM audio size:", binaryString.length, "bytes");
-      sessionRef.current.repeatAudio(binaryString);
+      console.log("[LiveAvatar] repeat:", text.slice(0, 80));
+      sessionRef.current.repeat(text);
     } catch (err) {
       console.error("[LiveAvatar] Speak error:", err);
     }
   }, []);
 
-  const interrupt = useCallback(async () => {
+  const interrupt = useCallback(() => {
     if (!sessionRef.current) return;
     try {
-      await sessionRef.current.interrupt();
+      sessionRef.current.interrupt();
     } catch (err) {
       console.error("[LiveAvatar] Interrupt error:", err);
     }
