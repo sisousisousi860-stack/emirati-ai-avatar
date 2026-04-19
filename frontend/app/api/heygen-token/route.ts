@@ -16,8 +16,11 @@ export async function POST() {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
+      mode: "FULL",
       avatar_id: AVATAR_ID,
-      voice_id: VOICE_ID,
+      avatar_persona: {
+        voice_id: VOICE_ID,
+      },
     }),
   });
 
@@ -31,11 +34,5 @@ export async function POST() {
   }
 
   const data = await resp.json();
-  console.log("[liveavatar-token] Response:", JSON.stringify(data).slice(0, 300));
-  const token = data?.data?.session_token ?? data?.session_token ?? data?.token;
-  if (!token) {
-    console.error("[liveavatar-token] No token in response:", JSON.stringify(data).slice(0, 500));
-    return NextResponse.json({ error: "No token in API response", raw: data }, { status: 502 });
-  }
-  return NextResponse.json({ token });
+  return NextResponse.json({ token: data.data.session_token });
 }
