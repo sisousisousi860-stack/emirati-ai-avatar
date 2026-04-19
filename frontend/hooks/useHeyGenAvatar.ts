@@ -1,42 +1,30 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import StreamingAvatar, {
-  AvatarQuality,
-  StreamingEvents,
-  TaskType,
-  TaskMode,
-} from "@heygen/streaming-avatar";
-
-const AVATAR_ID = "0930fd59-c8ad-434d-ad53-b391a1768720";
-const VOICE_ID = "997f0279afba4e1998e89d90becca013";
+import {
+  LiveAvatarSession,
+  SessionEvent,
+  SessionState,
+  AgentEventsEnum,
+} from "@heygen/liveavatar-web-sdk";
 
 export type AvatarState = "idle" | "loading" | "connected" | "speaking" | "error";
 
-export function useHeyGenAvatar() {
-  const avatarRef = useRef<StreamingAvatar | null>(null);
+export function useLiveAvatar() {
+  const sessionRef = useRef<LiveAvatarSession | null>(null);
   const [state, setState] = useState<AvatarState>("idle");
   const [error, setError] = useState<string | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-
-  const attachStream = useCallback(() => {
-    if (videoRef.current && streamRef.current) {
-      videoRef.current.srcObject = streamRef.current;
-      videoRef.current.play().catch(console.error);
-    }
-  }, []);
+  const elementRef = useRef<HTMLVideoElement | null>(null);
 
   const setVideoRef = useCallback((el: HTMLVideoElement | null) => {
-    videoRef.current = el;
-    if (el && streamRef.current) {
-      el.srcObject = streamRef.current;
-      el.play().catch(console.error);
+    elementRef.current = el;
+    if (el && sessionRef.current) {
+      sessionRef.current.attach(el);
     }
   }, []);
 
   const start = useCallback(async () => {
-    if (avatarRef.current) return;
+    if (sessionRef.current) return;
     setState("loading");
     setError(null);
 
@@ -47,98 +35,99 @@ export function useHeyGenAvatar() {
         const err = await tokenResp.text();
         throw new Error(`Token fetch failed: ${tokenResp.status} ${err}`);
       }
-      const tokenData = await tokenResp.json();
-      console.log("[LiveAvatar] Token response:", JSON.stringify(tokenData).slice(0, 200));
+      const { token } = await tokenResp.json();
+      if (!token) throw new Error("No token in response");
+      console.log("[LiveAvatar] Got token");
 
-      if (!tokenData.token) {
-        throw new Error(`No token in response: ${JSON.stringify(tokenData)}`);
-      }
+      const session = new LiveAvatarSession(token, {
+        voiceChat: false,
+      });
+      sessionRef.current = session;
 
-      const avatar = new StreamingAvatar({ token: tokenData.token });
-      avatarRef.current = avatar;
+      session.on(SessionEvent.SESSION_STATE_CHANGED, (s: SessionState) => {
+        console.log("[LiveAvatar] State:", s);
+        if (s === SessionState.CONNECTED) {
+          setState("connected");
+        } else if (s === SessionState.DISCONNECTED) {
+          setState("idle");
+          sessionRef.current = null;
+        }
+      });
 
-      avatar.on(StreamingEvents.STREAM_READY, (event: any) => {
-        console.log("[LiveAvatar] STREAM_READY fired");
-        streamRef.current = event.detail as MediaStream;
-        attachStream();
+      session.on(SessionEvent.SESSION_STREAM_READY, () => {
+        console.log("[LiveAvatar] Stream ready");
+        if (elementRef.current) {
+          session.attach(elementRef.current);
+        }
         setState("connected");
       });
 
-      avatar.on(StreamingEvents.AVATAR_START_TALKING, () => {
-        console.log("[LiveAvatar] Avatar started talking");
+      session.on(AgentEventsEnum.AVATAR_SPEAK_STARTED, () => {
+        console.log("[LiveAvatar] Speaking started");
         setState("speaking");
       });
-      avatar.on(StreamingEvents.AVATAR_STOP_TALKING, () => {
-        console.log("[LiveAvatar] Avatar stopped talking");
+
+      session.on(AgentEventsEnum.AVATAR_SPEAK_ENDED, () => {
+        console.log("[LiveAvatar] Speaking ended");
         setState("connected");
       });
-      avatar.on(StreamingEvents.STREAM_DISCONNECTED, () => {
-        console.log("[LiveAvatar] Stream disconnected");
-        streamRef.current = null;
-        setState("idle");
-        avatarRef.current = null;
-      });
 
-      console.log("[LiveAvatar] Calling createStartAvatar...");
-      const sessionInfo = await avatar.createStartAvatar({
-        avatarName: AVATAR_ID,
-        quality: AvatarQuality.Medium,
-        voice: {
-          voiceId: VOICE_ID,
-          rate: 1.0,
-          emotion: "FRIENDLY" as any,
-        },
-        language: "ar",
-      });
-      console.log("[LiveAvatar] Avatar started, session:", sessionInfo);
+      console.log("[LiveAvatar] Starting session...");
+      await session.start();
+      console.log("[LiveAvatar] Session started");
     } catch (err: any) {
       console.error("[LiveAvatar] Start error:", err);
       setError(err.message || String(err));
       setState("error");
-      avatarRef.current = null;
+      sessionRef.current = null;
     }
-  }, [attachStream]);
+  }, []);
 
   const speak = useCallback(async (text: string) => {
-    if (!avatarRef.current) return;
+    if (!sessionRef.current) return;
     try {
-      console.log("[LiveAvatar] Speaking:", text.slice(0, 80));
-      await avatarRef.current.speak({
-        text,
-        taskType: TaskType.REPEAT,
-        taskMode: TaskMode.ASYNC,
+      console.log("[LiveAvatar] TTS for:", text.slice(0, 60));
+      const res = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
       });
+      if (!res.ok) {
+        console.error("[LiveAvatar] TTS failed:", res.status);
+        return;
+      }
+      const { audio } = await res.json();
+      await sessionRef.current.repeatAudio(audio);
     } catch (err) {
       console.error("[LiveAvatar] Speak error:", err);
     }
   }, []);
 
   const interrupt = useCallback(async () => {
-    if (!avatarRef.current) return;
+    if (!sessionRef.current) return;
     try {
-      await avatarRef.current.interrupt();
+      await sessionRef.current.interrupt();
     } catch (err) {
       console.error("[LiveAvatar] Interrupt error:", err);
     }
   }, []);
 
   const stop = useCallback(async () => {
-    if (!avatarRef.current) return;
+    if (!sessionRef.current) return;
     try {
-      await avatarRef.current.stopAvatar();
+      await sessionRef.current.stop();
     } catch (err) {
       console.error("[LiveAvatar] Stop error:", err);
     }
-    avatarRef.current = null;
-    streamRef.current = null;
+    sessionRef.current = null;
     setState("idle");
   }, []);
 
   useEffect(() => {
     return () => {
-      if (avatarRef.current) {
-        avatarRef.current.stopAvatar().catch(() => {});
-        avatarRef.current = null;
+      if (sessionRef.current) {
+        sessionRef.current.stop().catch(() => {});
+        sessionRef.current = null;
       }
     };
   }, []);

@@ -15,7 +15,7 @@ import { Room, RoomEvent } from "livekit-client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ConnectionDetails } from "./api/connection-details/route";
 import { usePersonDetection } from "@hooks/usePersonDetection";
-import { useHeyGenAvatar } from "@hooks/useHeyGenAvatar";
+import { useLiveAvatar } from "@hooks/useHeyGenAvatar";
 
 export default function Page() {
   const [room] = useState(new Room());
@@ -41,7 +41,7 @@ export default function Page() {
     start: startAvatar,
     speak: avatarSpeak,
     stop: stopAvatar,
-  } = useHeyGenAvatar();
+  } = useLiveAvatar();
   const avatarSpeakRef = useRef(avatarSpeak);
   useEffect(() => { avatarSpeakRef.current = avatarSpeak; }, [avatarSpeak]);
 

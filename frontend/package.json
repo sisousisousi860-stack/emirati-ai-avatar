@@ -11,7 +11,7 @@
     "format:write": "prettier --write ."
   },
   "dependencies": {
-    "@heygen/streaming-avatar": "^2.1.0",
+    "@heygen/liveavatar-web-sdk": "^0.0.13",
     "@livekit/components-react": "^2.9.3",
     "@livekit/components-styles": "^1.1.4",
     "@tensorflow-models/coco-ssd": "^2.2.3",
