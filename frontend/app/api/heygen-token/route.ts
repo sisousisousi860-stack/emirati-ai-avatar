@@ -1,8 +1,5 @@
 import { NextResponse } from "next/server";
 
-const AVATAR_ID = "0930fd59-c8ad-434d-ad53-b391a1768720";
-const VOICE_ID = "997f0279afba4e1998e89d90becca013";
-
 export async function POST() {
   const apiKey = process.env.LIVEAVATAR_API_KEY;
   if (!apiKey) {
@@ -12,15 +9,34 @@ export async function POST() {
   const resp = await fetch("https://api.liveavatar.com/v1/sessions/token", {
     method: "POST",
     headers: {
-      "X-API-KEY": apiKey,
       "Content-Type": "application/json",
+      "X-API-KEY": apiKey,
     },
     body: JSON.stringify({
-      mode: "LITE",
-      avatar_id: AVATAR_ID,
+      avatar_id: "0930fd59-c8ad-434d-ad53-b391a1768720",
       avatar_persona: {
-        voice_id: VOICE_ID,
+        voice_id: "997f0279afba4e1998e89d90becca013",
+        language: "ar",
+        voice_settings: {
+          provider: "elevenLabs",
+          speed: 1,
+          stability: 0.75,
+          similarity_boost: 0.75,
+          style: 0,
+          use_speaker_boost: true,
+          model: "eleven_flash_v2_5",
+        },
+        stt_config: {
+          provider: "deepgram",
+        },
       },
+      mode: "FULL",
+      is_sandbox: false,
+      video_settings: {
+        quality: "high",
+        encoding: "H264",
+      },
+      interactivity_type: "CONVERSATIONAL",
     }),
   });
 

@@ -10,8 +10,11 @@ import {
 
 export type AvatarState = "idle" | "loading" | "connected" | "speaking" | "error";
 
+const KEEP_ALIVE_INTERVAL = 30_000;
+
 export function useLiveAvatar() {
   const sessionRef = useRef<LiveAvatarSession | null>(null);
+  const keepAliveRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [state, setState] = useState<AvatarState>("idle");
   const [error, setError] = useState<string | null>(null);
   const elementRef = useRef<HTMLVideoElement | null>(null);
@@ -20,6 +23,24 @@ export function useLiveAvatar() {
     elementRef.current = el;
     if (el && sessionRef.current) {
       sessionRef.current.attach(el);
+    }
+  }, []);
+
+  const startKeepAlive = useCallback(() => {
+    if (keepAliveRef.current) return;
+    keepAliveRef.current = setInterval(() => {
+      if (sessionRef.current) {
+        sessionRef.current.keepAlive().catch((e) =>
+          console.warn("[LiveAvatar] keepAlive failed:", e)
+        );
+      }
+    }, KEEP_ALIVE_INTERVAL);
+  }, []);
+
+  const stopKeepAlive = useCallback(() => {
+    if (keepAliveRef.current) {
+      clearInterval(keepAliveRef.current);
+      keepAliveRef.current = null;
     }
   }, []);
 
@@ -48,8 +69,10 @@ export function useLiveAvatar() {
         console.log("[LiveAvatar] State:", s);
         if (s === SessionState.CONNECTED) {
           setState("connected");
+          startKeepAlive();
         } else if (s === SessionState.DISCONNECTED) {
           setState("idle");
+          stopKeepAlive();
           sessionRef.current = null;
         }
       });
@@ -81,7 +104,7 @@ export function useLiveAvatar() {
       setState("error");
       sessionRef.current = null;
     }
-  }, []);
+  }, [startKeepAlive, stopKeepAlive]);
 
   const speak = useCallback((text: string) => {
     if (!sessionRef.current) return;
@@ -103,6 +126,7 @@ export function useLiveAvatar() {
   }, []);
 
   const stop = useCallback(async () => {
+    stopKeepAlive();
     if (!sessionRef.current) return;
     try {
       await sessionRef.current.stop();
@@ -111,16 +135,17 @@ export function useLiveAvatar() {
     }
     sessionRef.current = null;
     setState("idle");
-  }, []);
+  }, [stopKeepAlive]);
 
   useEffect(() => {
     return () => {
+      stopKeepAlive();
       if (sessionRef.current) {
         sessionRef.current.stop().catch(() => {});
         sessionRef.current = null;
       }
     };
-  }, []);
+  }, [stopKeepAlive]);
 
   return { state, error, setVideoRef, start, speak, interrupt, stop };
 }
