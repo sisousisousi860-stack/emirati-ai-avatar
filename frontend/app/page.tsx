@@ -73,13 +73,16 @@ export default function Page() {
       const hasArabic = /[\u0600-\u06FF]/.test(text);
       setDetectedLang(hasArabic ? "AR" : "EN");
 
-      // Forward agent text to LiveAvatar for lip-sync (send each segment immediately)
+      // Forward agent text to LiveAvatar sentence-by-sentence
       const isAgent = participant && !participant.isLocal;
-      if (isAgent) {
-        for (const seg of segments) {
-          const segText = (seg.text ?? "").trim();
-          if (segText && seg.final) {
-            avatarSpeakRef.current(segText);
+      if (isAgent && text.trim()) {
+        const isFinal = segments.some((s: any) => s.final);
+        if (isFinal) {
+          // Split into sentences and send each immediately
+          const sentences = text.match(/[^.!?؟\n]+[.!?؟\n]?/g) || [text];
+          for (const sentence of sentences) {
+            const s = sentence.trim();
+            if (s) avatarSpeakRef.current(s);
           }
         }
       }
