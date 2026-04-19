@@ -15,7 +15,7 @@ export async function POST() {
     body: JSON.stringify({
       avatar_id: "0930fd59-c8ad-434d-ad53-b391a1768720",
       avatar_persona: {
-        voice_id: "997f0279afba4e1998e89d90becca013",
+        voice_id: "e948b062-7dce-4f2b-bcf6-98bd3511106b",
         language: "en",
         voice_settings: {
           provider: "elevenLabs",
