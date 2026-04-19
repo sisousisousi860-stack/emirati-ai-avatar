@@ -16,7 +16,7 @@ export async function POST() {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      mode: "FULL",
+      mode: "LITE",
       avatar_id: AVATAR_ID,
       avatar_persona: {
         voice_id: VOICE_ID,
