@@ -66,24 +66,30 @@ export default function Page() {
     return () => { stream?.getTracks().forEach((t) => t.stop()); };
   }, []);
 
-  // ── Language detection from transcription ─────────────────────────────────
+  // ── Language detection + stream agent text to avatar ─────────────────────
+  const sentSegmentIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     const onTranscription = (segments: any[], participant: any) => {
-      const text = segments.map((s: any) => s.text ?? "").join(" ");
-      const hasArabic = /[\u0600-\u06FF]/.test(text);
+      const fullText = segments.map((s: any) => s.text ?? "").join(" ");
+      const hasArabic = /[\u0600-\u06FF]/.test(fullText);
       setDetectedLang(hasArabic ? "AR" : "EN");
 
-      // Forward agent text to LiveAvatar sentence-by-sentence
       const isAgent = participant && !participant.isLocal;
-      if (isAgent && text.trim()) {
-        const isFinal = segments.some((s: any) => s.final);
-        if (isFinal) {
-          // Split into sentences and send each immediately
-          const sentences = text.match(/[^.!?؟\n]+[.!?؟\n]?/g) || [text];
-          for (const sentence of sentences) {
-            const s = sentence.trim();
-            if (s) avatarSpeakRef.current(s);
-          }
+      if (!isAgent) return;
+
+      // Send each final segment to avatar exactly once
+      for (const seg of segments) {
+        if (!seg.final) continue;
+        const id = seg.id ?? seg.text;
+        if (sentSegmentIdsRef.current.has(id)) continue;
+        sentSegmentIdsRef.current.add(id);
+        const text = (seg.text ?? "").trim();
+        if (!text) continue;
+        // Split into sentences so avatar starts speaking fast
+        const sentences = text.match(/[^.!?؟\n]+[.!?؟\n]?/g) || [text];
+        for (const sentence of sentences) {
+          const s = sentence.trim();
+          if (s) avatarSpeakRef.current(s);
         }
       }
     };
@@ -151,6 +157,7 @@ export default function Page() {
     const onConnected = () => {
       setRoomConnected(true);
       connectingRef.current = false;
+      sentSegmentIdsRef.current.clear();
       const payload = JSON.stringify({ type: "visitor", name: recognizedNameRef.current ?? null });
       room.localParticipant
         .publishData(new TextEncoder().encode(payload), { reliable: true })

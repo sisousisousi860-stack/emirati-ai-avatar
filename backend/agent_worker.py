@@ -1,13 +1,13 @@
 """
-LiveKit voice-AI agent — STT + LLM only.
+LiveKit voice-AI agent — STT + LLM only (no TTS).
 
-Audio pipeline:  mic → Deepgram STT → GPT-4o-mini → ElevenLabs TTS
-Avatar lip-sync is handled on the frontend via LiveAvatar streaming SDK.
+Audio pipeline:  mic → Deepgram STT → GPT-4o-mini → text transcription
+TTS + avatar lip-sync are handled on the frontend via LiveAvatar SDK.
 """
 import logging
 from dotenv import load_dotenv
 from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, WorkerType, cli
-from livekit.plugins import deepgram, openai, elevenlabs, silero
+from livekit.plugins import deepgram, openai, silero
 
 load_dotenv(".env.local")
 
@@ -22,10 +22,6 @@ async def entrypoint(ctx: JobContext):
     session = AgentSession(
         stt=deepgram.STT(model="nova-3", language="ar"),
         llm=openai.LLM(model="gpt-4o-mini", temperature=0.7),
-        tts=elevenlabs.TTS(
-            voice_id="TlKDNWnTobzVS4SXWTDi",
-            model="eleven_multilingual_v2",
-        ),
         vad=silero.VAD.load(
             activation_threshold=0.25,
             min_speech_duration=0.1,
